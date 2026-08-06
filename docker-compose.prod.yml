@@ -1,4 +1,4 @@
-# Production stack for openerp.gerege.mn.
+# Production stack for sso.gerege.mn.
 #
 # This file pulls pre-built images from GHCR — it never builds on the server.
 # CI builds and pushes both images, copies this file over and runs it, so the
@@ -11,16 +11,16 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: platform_erp_postgres
+    container_name: sso_erp_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: platform_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:5435:5432"
     volumes:
-      - platform_erp_postgres_data:/var/lib/postgresql/data
+      - sso_erp_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d platform_db"]
       interval: 5s
@@ -31,7 +31,7 @@ services:
   # starting the API, so the schema is never behind the binary.
   migrate:
     image: ${IMAGE_BACKEND}:${IMAGE_TAG:-latest}
-    container_name: platform_erp_migrate
+    container_name: sso_erp_migrate
     pull_policy: always
     command: ["/app/migrate", "up"]
     environment:
@@ -43,7 +43,7 @@ services:
 
   backend:
     image: ${IMAGE_BACKEND}:${IMAGE_TAG:-latest}
-    container_name: platform_erp_backend
+    container_name: sso_erp_backend
     restart: unless-stopped
     pull_policy: always
     environment:
@@ -79,7 +79,7 @@ services:
       DAN_MOCK_MODE: ${DEMO_MODE:-false}
       XYP_MOCK_MODE: ${DEMO_MODE:-false}
     ports:
-      - "127.0.0.1:8082:8080"
+      - "127.0.0.1:8095:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,14 +93,14 @@ services:
 
   frontend:
     image: ${IMAGE_FRONTEND}:${IMAGE_TAG:-latest}
-    container_name: platform_erp_frontend
+    container_name: sso_erp_frontend
     restart: unless-stopped
     pull_policy: always
     ports:
-      - "127.0.0.1:3008:3000"
+      - "127.0.0.1:3011:3000"
     depends_on:
       backend:
         condition: service_healthy
 
 volumes:
-  platform_erp_postgres_data:
+  sso_erp_postgres_data:
