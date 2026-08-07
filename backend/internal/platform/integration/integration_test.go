@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/integration"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/integration"
 )
 
 func TestIntegrationManagerList(t *testing.T) {

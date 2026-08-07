@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -26,33 +26,33 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/billing"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/contacts"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/developer_portal"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/documents"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/esign"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/gov_services"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/inventory"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/apps/products"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/ai"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appcatalog"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appinstaller"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/auth"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/dan"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/eid"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/eidmongolia"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/gerege"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/integration"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/mailer"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/menu"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/observability"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/rbac"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/resilience"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/security"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/ssoprovider"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/apps/billing"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/apps/contacts"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/apps/developer_portal"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/apps/documents"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/apps/esign"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/apps/gov_services"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/apps/inventory"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/apps/products"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/ai"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appcatalog"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appinstaller"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/config"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/dan"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eid"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eidmongolia"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/gerege"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/integration"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/mailer"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/menu"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/observability"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/rbac"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/resilience"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/security"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/ssoprovider"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -589,7 +589,7 @@ func reportSignInFailure(w http.ResponseWriter, err error) {
 		return
 	}
 	slog.Error("failed to link verified national identity", "error", err)
-	writeJSONError(w, http.StatusInternalServerError, "Баталгаажсан eID хэрэглэгчийг Gerege Nexus бүртгэлтэй холбож чадсангүй")
+	writeJSONError(w, http.StatusInternalServerError, "Баталгаажсан eID хэрэглэгчийг Gerege SSO бүртгэлтэй холбож чадсангүй")
 }
 
 // resolveNationalIdentityUser maps a verified national identity (E-ID / DAN)
@@ -615,7 +615,7 @@ func (s *Server) resolveNationalIdentityUser(ctx context.Context, email, regNumb
 	}
 
 	if config.IsProduction() {
-		return "", "", signInError{fmt.Sprintf("no Gerege Nexus user is linked to national identity %s", regNumber)}
+		return "", "", signInError{fmt.Sprintf("no Gerege SSO user is linked to national identity %s", regNumber)}
 	}
 
 	// Development convenience only: fall back to the seeded demo account so
@@ -632,6 +632,35 @@ func (s *Server) resolveNationalIdentityUser(ctx context.Context, email, regNumb
 	slog.Warn("national identity login fell back to the demo account",
 		"reg_number", regNumber, "email", email)
 	return userID, tenantID, nil
+}
+
+// eidLinkingKey returns the HMAC key that binds an eID subject to its platform
+// account.
+//
+// This is deliberately NOT the same knob as the eID API credential, even though
+// it used to be. EID_RP_SECRET authenticates calls to eID Mongolia and is
+// rotated on their schedule, but the same value fed eidLinkingDigest — and that
+// digest is both the synthetic account's lookup key and its password preimage.
+// Rotating the API secret therefore silently orphaned every existing eID user:
+// a new digest means a new synthetic email, so the lookup misses and the
+// citizen is either re-provisioned as a stranger (losing tenant, roles and
+// history) or refused outright when JIT provisioning is off.
+//
+// EID_LINKING_KEY separates the two. Set it to the RP secret that was in force
+// when the existing accounts were created and it keeps producing their digests
+// no matter how often EID_RP_SECRET rotates afterwards.
+//
+// The fallback preserves today's behaviour exactly for deployments that have
+// not set it. Note the asymmetry: presence is tested on the trimmed value, so a
+// whitespace-only EID_LINKING_KEY falls back rather than becoming a key nobody
+// meant, but the key itself is the raw value — it has to reproduce the previous
+// secret byte for byte, padding included. EID_RP_SECRET is likewise never
+// trimmed here, because trimming it now would change digests that already exist.
+func eidLinkingKey() string {
+	if raw := os.Getenv("EID_LINKING_KEY"); strings.TrimSpace(raw) != "" {
+		return raw
+	}
+	return os.Getenv("EID_RP_SECRET")
 }
 
 // eidLinkingDigest derives the stable, non-PII handle for an eID subject. It
@@ -705,9 +734,9 @@ func (s *Server) resolveOrProvisionEIDUser(ctx context.Context, identity *eid.EI
 	if subject == "" {
 		return "", "", errors.New("eID identity carries neither a civil ID nor a registration number")
 	}
-	linkingKey := os.Getenv("EID_RP_SECRET")
+	linkingKey := eidLinkingKey()
 	if linkingKey == "" {
-		return "", "", errors.New("EID_RP_SECRET is unset, so no account-linking key is available")
+		return "", "", errors.New("neither EID_LINKING_KEY nor EID_RP_SECRET is set, so no account-linking key is available")
 	}
 	digest := eidLinkingDigest(linkingKey, subject)
 	syntheticEmail := "eid+" + digest[:32] + "@identity.invalid"

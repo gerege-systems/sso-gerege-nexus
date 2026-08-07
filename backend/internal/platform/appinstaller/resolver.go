@@ -3,7 +3,7 @@ package appinstaller
 import (
 	"fmt"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appcatalog"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appcatalog"
 )
 
 type DependencyGraph struct {

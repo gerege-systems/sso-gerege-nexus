@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/gerege"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/config"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/gerege"
 )
 
 func (m *Module) getSettingsHandler(w http.ResponseWriter, r *http.Request) {

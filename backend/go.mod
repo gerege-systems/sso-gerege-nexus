@@ -1,4 +1,4 @@
-module github.com/gerege-systems/open-gerege-nexus/backend
+module github.com/gerege-systems/sso-gerege-nexus/backend
 
 go 1.26
 

@@ -1,6 +1,6 @@
 # Project Contributors & Authors
 
-Thank you to everyone in **Gerege Systems** and the open-source community who has contributed to **Gerege Nexus**!
+Thank you to everyone in **Gerege Systems** and the open-source community who has contributed to **Gerege SSO**!
 
 ## Core Maintainers & Organization Members
 - **Gerege Systems Development Team** ([@gerege-systems](https://github.com/gerege-systems))

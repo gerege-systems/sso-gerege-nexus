@@ -16,8 +16,8 @@ import (
 
 	coreeid "github.com/gerege-systems/open-gerege-core/pkg/eid"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // E-ID signing is not a form the platform fills in on the citizen's behalf. eID
@@ -120,7 +120,7 @@ type EIDSignProgress struct {
 const eidDisplayTextBytes = 60
 
 // signatureDisplayText is what the citizen reads on their own device. It names the
-// document, because approving "Gerege Nexus-д нэвтрэх" is not consent to sign a
+// document, because approving "Gerege SSO-д нэвтрэх" is not consent to sign a
 // contract.
 func signatureDisplayText(title string) string {
 	const prefix = "Гарын үсэг: "

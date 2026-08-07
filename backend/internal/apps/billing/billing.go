@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -18,9 +18,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appregistry"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // VATRate is the Mongolian value added tax rate applied to e-Barimt invoices.

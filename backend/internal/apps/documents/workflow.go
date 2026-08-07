@@ -16,8 +16,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // ErrNotRoutable is returned when a document cannot be sent for approval: it is

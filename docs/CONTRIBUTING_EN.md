@@ -1,7 +1,7 @@
 # Contributing
 
-Thank you for your interest in contributing to **Gerege Nexus**
-(`open-gerege-nexus`). Community contributions are what make a modular,
+Thank you for your interest in contributing to **Gerege SSO**
+(`sso-gerege-nexus`). Community contributions are what make a modular,
 high-performance open-source platform possible.
 
 <p>

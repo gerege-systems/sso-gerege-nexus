@@ -15,9 +15,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/dan"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/eid"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/dan"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eid"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // These tests exercise signing against a real PostgreSQL schema, because what

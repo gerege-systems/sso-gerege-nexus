@@ -3,7 +3,7 @@
  */
 export const appearance = {
   "appearance.view.title": { mn: "Харагдац", en: "Appearance" },
-  "appearance.view.subtitle": { mn: "Энэ төхөөрөмж дээр Gerege Nexus хэрхэн харагдахыг тохируулна.", en: "Choose how Gerege Nexus looks on this device." },
+  "appearance.view.subtitle": { mn: "Энэ төхөөрөмж дээр Gerege SSO хэрхэн харагдахыг тохируулна.", en: "Choose how Gerege SSO looks on this device." },
   "appearance.view.theme_style_hint": { mn: "Сонгодог харагдац эсвэл Gerege дизайн системийг сонгоно.", en: "Pick the classic look or the Gerege design system." },
   "appearance.view.original_hint": { mn: "Сонгодог интерфэйс", en: "The classic interface" },
   "appearance.view.gerege_hint": { mn: "Gerege-ийн cobalt дизайн систем", en: "The Gerege cobalt design system" },

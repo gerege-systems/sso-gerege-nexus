@@ -1,7 +1,7 @@
 # Architecture Specification
 
 System architecture, layering and technical decisions behind the
-**Gerege Nexus**.
+**Gerege SSO**.
 
 <p>
   <a href="ARCHITECTURE_SPECIFICATION.md"><img src="assets/icons/flag-mn.png" width="18" height="18" alt=""> Монгол</a>
@@ -15,7 +15,7 @@ System architecture, layering and technical decisions behind the
 
 ## 1. System overview
 
-**Gerege Nexus** is a high-performance **modular monolith platform** that
+**Gerege SSO** is a high-performance **modular monolith platform** that
 connects services, operations, systems, and data across public and private
 organizations, wired directly into Mongolia's national digital infrastructure.
 
@@ -61,7 +61,7 @@ organizations, wired directly into Mongolia's national digital infrastructure.
 
 ```
 +-----------------------------------------------------------------------------------+
-|                              Gerege Nexus                             |
+|                                    Gerege SSO                                     |
 +-----------------------------------------------------------------------------------+
                                           |
                 +-------------------------+-------------------------+

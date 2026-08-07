@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  */
@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
 )
 
 // SessionResolver turns a platform session token into the signed-in user. The

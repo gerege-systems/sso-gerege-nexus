@@ -42,7 +42,7 @@ const LANGUAGE_NAMES = {
 
 /** Terms that must survive translation untouched. */
 const KEEP = [
-  "Gerege Nexus", "eID", "E-ID", "DAN", "XYP", "OAuth2", "OIDC", "SSO", "RBAC",
+  "Gerege SSO", "Gerege Nexus", "eID", "E-ID", "DAN", "XYP", "OAuth2", "OIDC", "SSO", "RBAC",
   "tenant", "SKU", "e-Barimt", "PIN2", "QR", "API", "PDF", "Gemini",
 ];
 
@@ -88,8 +88,9 @@ async function callGemini(batch, locale) {
 
   const prompt = [
     `Translate these user-interface strings into ${LANGUAGE_NAMES[locale]} (code ${locale}).`,
-    `They come from Gerege Nexus, a platform connecting services, operations, systems and data`,
-    `for public and private organizations. The tone is plain and professional.`,
+    `They come from Gerege SSO, a single sign-on and identity & access management`,
+    `platform — built on Gerege Nexus — that unifies users, authentication, permissions`,
+    `and system access for public and private organizations. The tone is plain and professional.`,
     ``,
     `Rules:`,
     `- Return ONLY a JSON object mapping each id to its translation. No prose, no code fence.`,

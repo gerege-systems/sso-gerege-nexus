@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -23,7 +23,7 @@ import (
 	"time"
 
 	coreeid "github.com/gerege-systems/open-gerege-core/pkg/eid"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/config"
 )
 
 // PollWindow is how long the relying party holds a session poll open before it
@@ -105,11 +105,11 @@ func NewEIDService() *EIDService {
 	mock := config.MockEnabled("EID_MOCK_MODE")
 	clientID := os.Getenv("EID_CLIENT_ID")
 	if clientID == "" {
-		// Legacy compatibility name, kept deliberately through the Gerege Nexus
-		// rebrand: this is the client ID registered with the identity provider,
-		// not a display string. Renaming it here would not rename it there, and
-		// the mismatch would fail every sign-in. Change it only alongside a new
-		// registration, via EID_CLIENT_ID.
+		// Legacy compatibility name, kept deliberately through both the Gerege
+		// Nexus and Gerege SSO rebrands: this is the client ID registered with
+		// the identity provider, not a display string. Renaming it here would
+		// not rename it there, and the mismatch would fail every sign-in.
+		// Change it only alongside a new registration, via EID_CLIENT_ID.
 		clientID = "gerege-open-erp-client"
 	}
 	clientSecret := os.Getenv("EID_CLIENT_SECRET")
@@ -137,7 +137,7 @@ func NewEIDService() *EIDService {
 		httpClient:   &http.Client{Timeout: 15 * time.Second},
 		rpClient: coreeid.NewClient(
 			os.Getenv("EID_BASE_URL"), os.Getenv("EID_RP_UUID"),
-			valueOr(os.Getenv("EID_RP_NAME"), "Gerege Nexus"), os.Getenv("EID_RP_SECRET"),
+			valueOr(os.Getenv("EID_RP_NAME"), "Gerege SSO"), os.Getenv("EID_RP_SECRET"),
 			valueOr(os.Getenv("EID_CERT_LEVEL"), "ADVANCED"),
 		),
 		mockSessions: make(map[string]mockSession),
@@ -156,7 +156,7 @@ func (s *EIDService) StartDeviceLink(ctx context.Context, callbackURL string) (*
 	if s.mockMode {
 		return s.startMock("", true), nil
 	}
-	started, err := s.rpClient.QRInitiate(ctx, valueOr(os.Getenv("EID_DISPLAY_TEXT"), "Gerege Nexus-д нэвтрэх"), callbackURL, "")
+	started, err := s.rpClient.QRInitiate(ctx, valueOr(os.Getenv("EID_DISPLAY_TEXT"), "Gerege SSO-д нэвтрэх"), callbackURL, "")
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (s *EIDService) StartByNationalID(ctx context.Context, nationalID, callback
 	if s.mockMode {
 		return s.startMock(nationalID, false), nil
 	}
-	started, err := s.rpClient.Initiate(ctx, nationalID, valueOr(os.Getenv("EID_DISPLAY_TEXT"), "Gerege Nexus-д нэвтрэх"), callbackURL)
+	started, err := s.rpClient.Initiate(ctx, nationalID, valueOr(os.Getenv("EID_DISPLAY_TEXT"), "Gerege SSO-д нэвтрэх"), callbackURL)
 	if err != nil {
 		return nil, err
 	}

@@ -8,10 +8,17 @@
 #   IMAGE_BACKEND, IMAGE_FRONTEND, IMAGE_TAG, POSTGRES_PASSWORD,
 #   SSO_DEFAULT_CLIENT_SECRET, PUBLIC_ORIGIN
 
+# Pinned so the project identity stops depending on the deploy directory.
+# Compose otherwise names the project after the directory it runs from, which
+# made /opt/<anything> a load-bearing path: moving it silently produced a second
+# project, and a second project means new containers fighting the old ones for
+# the same host ports. With this set, the directory is just a directory.
+name: sso-gerege-nexus
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: sso_erp_postgres
+    container_name: gerege_sso_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: platform_db
@@ -31,7 +38,7 @@ services:
   # starting the API, so the schema is never behind the binary.
   migrate:
     image: ${IMAGE_BACKEND}:${IMAGE_TAG:-latest}
-    container_name: sso_erp_migrate
+    container_name: gerege_sso_migrate
     pull_policy: always
     command: ["/app/migrate", "up"]
     environment:
@@ -43,7 +50,7 @@ services:
 
   backend:
     image: ${IMAGE_BACKEND}:${IMAGE_TAG:-latest}
-    container_name: sso_erp_backend
+    container_name: gerege_sso_backend
     restart: unless-stopped
     pull_policy: always
     environment:
@@ -72,9 +79,13 @@ services:
       EID_BASE_URL: ${EID_BASE_URL:-https://eidmongolia.mn/v3}
       EID_RP_UUID: ${EID_RP_UUID:-}
       EID_RP_SECRET: ${EID_RP_SECRET:-}
-      EID_RP_NAME: ${EID_RP_NAME:-Gerege Nexus}
+      # Account-linking HMAC key. Empty falls back to EID_RP_SECRET; pin it to
+      # the secret the existing accounts were created under so rotating the API
+      # credential above cannot orphan them.
+      EID_LINKING_KEY: ${EID_LINKING_KEY:-}
+      EID_RP_NAME: ${EID_RP_NAME:-Gerege SSO}
       EID_CERT_LEVEL: ${EID_CERT_LEVEL:-ADVANCED}
-      EID_DISPLAY_TEXT: ${EID_DISPLAY_TEXT:-Gerege Nexus-д нэвтрэх}
+      EID_DISPLAY_TEXT: ${EID_DISPLAY_TEXT:-Gerege SSO-д нэвтрэх}
       EID_JIT_TENANT_SLUG: ${EID_JIT_TENANT_SLUG:-}
       # eID Mongolia qualified PDF signing. It reuses the RP credentials above —
       # one registration carries both the authentication and the SIGNATURE
@@ -119,7 +130,7 @@ services:
 
   frontend:
     image: ${IMAGE_FRONTEND}:${IMAGE_TAG:-latest}
-    container_name: sso_erp_frontend
+    container_name: gerege_sso_frontend
     restart: unless-stopped
     pull_policy: always
     ports:
@@ -129,4 +140,20 @@ services:
         condition: service_healthy
 
 volumes:
+  # The live database. Both lines below are deliberate.
+  #
+  # The key keeps its pre-rebrand name: renaming it does not move data, it
+  # creates a second, empty volume and the stack comes up with no database.
+  # Container names above are safe to rename because Docker recreates
+  # containers on every rollout — a volume is not.
+  #
+  # `name:` pins the real volume. Without it Compose derives the name from the
+  # project, and the project name comes from the deploy directory — so moving
+  # /opt/sso-gerege-mn-erp to /opt/sso-gerege-nexus would have silently pointed
+  # a healthy-looking stack at a brand-new empty volume. Pinning it decouples
+  # the data from the directory name, which is what makes that move safe.
+  #
+  # This must match the volume that already exists on the host. Verify with
+  # `docker volume ls | grep postgres_data` before changing it.
   sso_erp_postgres_data:
+    name: sso-gerege-mn-erp_sso_erp_postgres_data

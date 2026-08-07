@@ -1,6 +1,6 @@
 # Баримт бичгийн төв — Documentation Hub
 
-Энэ хавтас нь **Gerege Nexus**-ын бүх баримт бичиг болон орчуулгыг
+Энэ хавтас нь **Gerege SSO**-ын бүх баримт бичиг болон орчуулгыг
 агуулна. Үндсэн хэл нь монгол; орчуулгууд нь файлын нэрийн `_AR`, `_ZH`, `_EN`,
 `_FR`, `_RU`, `_ES` дагаварт хадгалагдана.
 
@@ -9,7 +9,7 @@
 Шинэ хэл нэмэхийн өмнө энэ бодлогыг өөрчлөх шаардлагатай: жагсаалт нь дур
 зоргоор биш, олон улсын байгууллагуудын хэрэглэдэг жишигт тулгуурласан.
 
-This directory holds every Gerege Nexus document and translation. Mongolian is
+This directory holds every Gerege SSO document and translation. Mongolian is
 the source language. **The language policy is Mongolian plus the six official
 languages of the United Nations** (Arabic, Chinese, English, French, Russian,
 Spanish) — seven in total.

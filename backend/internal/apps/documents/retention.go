@@ -12,8 +12,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // RetentionRule is how long a document type is kept. Nothing deletes on this

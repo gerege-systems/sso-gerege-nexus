@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -28,14 +28,14 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appregistry"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/auth"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/dan"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/eid"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/security"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/dan"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eid"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/security"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 	"golang.org/x/time/rate"
 )
 

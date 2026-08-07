@@ -68,7 +68,7 @@ export default function ConsentPage() {
       <header className="h-[72px] px-6 max-w-3xl w-full mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 font-extrabold tracking-tight text-slate-900">
           <img src="/brand.webp" alt="" className="w-9 h-9 rounded-lg" />
-          <span>Gerege ERP</span>
+          <span>Gerege SSO</span>
         </Link>
         <LanguageSwitcher />
       </header>

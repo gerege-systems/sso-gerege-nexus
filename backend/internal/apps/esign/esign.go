@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -33,13 +33,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appregistry"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/auth"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/eidmongolia"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/gerege"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/rbac"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eidmongolia"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/gerege"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/rbac"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 type Module struct {

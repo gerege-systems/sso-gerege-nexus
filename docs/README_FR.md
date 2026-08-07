@@ -1,17 +1,24 @@
-# Gerege Nexus
+# Gerege SSO
 
-**Plateforme intégrée d'opérations numériques**
+**Plateforme d'authentification unique et de gestion des identités et des accès**
 
-**Gerege Nexus** est une plateforme modulaire open source qui relie les
-services, les opérations, les systèmes et les données des organisations
-publiques et privées. Elle place le **mongol au premier plan** et s'intègre
-directement à l'infrastructure numérique nationale de la Mongolie (DAN, E-ID,
-XYP / ХУР).
+**Gerege SSO** est une plateforme open source, bâtie sur
+[Gerege Nexus](https://github.com/gerege-systems/open-gerege-nexus), qui unifie
+les utilisateurs, l'authentification, les droits et l'accès aux systèmes des
+organisations publiques et privées. Elle place le **mongol au premier plan** et
+s'intègre directement à l'infrastructure numérique nationale de la Mongolie
+(DAN, E-ID, XYP / ХУР).
+
+Un citoyen ou un agent se vérifie **une seule fois** avec son identité numérique
+nationale, puis accède à toutes les applications auxquelles il a droit sans se
+reconnecter. Les systèmes tiers se raccordent à cette session via OAuth2 / OIDC
+plutôt que de tenir leurs propres bases de mots de passe.
 
 *Nexus* désigne le point de connexion : là où se rejoignent organisations,
-services, processus, systèmes, utilisateurs et données. La plateforme
-elle-même n'est liée à aucun secteur — ce sont les modules qui y tournent qui
-donnent son caractère à un déploiement.
+services, processus, systèmes, utilisateurs et données. Gerege SSO en est la
+**couche d'identité et d'accès** : elle établit qui est la personne et décide de
+ce à quoi elle peut accéder. Ce sont les modules qui y tournent qui donnent son
+caractère à un déploiement.
 
 Les modules sont compilés dans un seul binaire Go, tandis qu'un magasin
 d'applications adossé à PostgreSQL décide des applications actives pour chaque

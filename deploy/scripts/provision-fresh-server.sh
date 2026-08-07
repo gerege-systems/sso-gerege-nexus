@@ -15,7 +15,7 @@
 set -euo pipefail
 
 DEPLOY_USER="${DEPLOY_USER:-deploy}"
-# deploy.yml hardcodes this path (APP_DIR=/opt/sso-gerege-mn-erp in the rollout
+# deploy.yml hardcodes this path (APP_DIR=/opt/sso-gerege-nexus in the rollout
 # script and as the scp target), so overriding it here only makes sense
 # alongside an edit there.
 #
@@ -26,7 +26,7 @@ DEPLOY_USER="${DEPLOY_USER:-deploy}"
 # is a healthy container over an empty database. Moving it is a data migration —
 # stop the stack, copy the volume, repoint both this and deploy.yml — not a
 # tidy-up.
-APP_DIR="${APP_DIR:-/opt/sso-gerege-mn-erp}"
+APP_DIR="${APP_DIR:-/opt/sso-gerege-nexus}"
 DOMAIN="${DOMAIN:-sso.gerege.mn}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-admin@gerege.mn}"
 # Must match the private half stored in the DEPLOY_SSH_KEY repository secret.
@@ -45,8 +45,8 @@ if [ -z "$DEPLOY_PUBKEY" ]; then
   exit 1
 fi
 
-if [ "$APP_DIR" != "/opt/sso-gerege-mn-erp" ]; then
-  echo "warning: APP_DIR is $APP_DIR but deploy.yml deploys to /opt/sso-gerege-mn-erp." >&2
+if [ "$APP_DIR" != "/opt/sso-gerege-nexus" ]; then
+  echo "warning: APP_DIR is $APP_DIR but deploy.yml deploys to /opt/sso-gerege-nexus." >&2
 fi
 
 echo "==> packages"

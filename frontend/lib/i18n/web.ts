@@ -30,5 +30,5 @@ export const web = {
   "web.view.coming_soon": { mn: "Удахгүй", en: "Coming soon" },
   "web.view.coming_soon_body": { mn: "Энэ хэсэг хөгжүүлэлтийн шатанд байна. Бэлэн болмогц энд харагдана.", en: "This screen is still being built. It will appear here once it ships." },
 
-  "web.message.loading_platform": { mn: "Платформыг ачаалж байна...", en: "Loading Gerege Nexus..." },
+  "web.message.loading_platform": { mn: "Платформыг ачаалж байна...", en: "Loading Gerege SSO..." },
 } as const;

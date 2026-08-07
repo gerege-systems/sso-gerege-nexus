@@ -72,7 +72,7 @@ jobs:
             # This fork's own deploy directory. Reading the neighbouring stack's
             # .env would protect its tag and leave the tag this repository is
             # actually running unprotected — the one image that must survive.
-            grep -E '^IMAGE_TAG=' /opt/sso-gerege-mn-erp/.env | cut -d= -f2
+            grep -E '^IMAGE_TAG=' /opt/sso-gerege-nexus/.env | cut -d= -f2
 
       - name: Resolve what to protect
         id: protect

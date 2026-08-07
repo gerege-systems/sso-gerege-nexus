@@ -111,11 +111,11 @@ export default function Layout({children}:{children:React.ReactNode}){
   return <div className="gerege-shell min-h-screen flex flex-col">
     <header className="gerege-topbar h-16 flex items-center border-b sticky top-0 z-50">
       <Link href="/apps" className="gerege-header-brand w-16 h-full shrink-0 grid place-items-center border-r border-[var(--gerege-border)]">
-        {theme.design==="gerege"?<img src={brandLogo.src} width={36} height={36} alt="Gerege Nexus" className="w-9 h-9 rounded-lg shadow-sm"/>:<span className="original-brand-mark w-9 h-9 rounded-lg grid place-items-center"><Building2 className="w-6 h-6"/></span>}
+        {theme.design==="gerege"?<img src={brandLogo.src} width={36} height={36} alt="Gerege SSO" className="w-9 h-9 rounded-lg shadow-sm"/>:<span className="original-brand-mark w-9 h-9 rounded-lg grid place-items-center"><Building2 className="w-6 h-6"/></span>}
       </Link>
       <div className={`gerege-header-context h-full flex items-center gap-3 overflow-hidden transition-all duration-200 ${panelOpen?"is-open":""}`}>
         <span className="shrink-0 text-[var(--gerege-blue)]">{selected?(iconMap[selected.icon]||<Package className="w-5 h-5"/>):<LayoutGrid className="w-5 h-5"/>}</span>
-        <span className="min-w-0"><small className="block text-[11px] leading-4 text-slate-500 truncate">Gerege Nexus</small><strong className="block text-[15px] leading-5 text-slate-900 truncate">{brandTitle}</strong></span>
+        <span className="min-w-0"><small className="block text-[11px] leading-4 text-slate-500 truncate">Gerege SSO</small><strong className="block text-[15px] leading-5 text-slate-900 truncate">{brandTitle}</strong></span>
       </div>
       <div className="gerege-menu-toggle w-16 h-full shrink-0 grid place-items-center"><button onClick={togglePanel} className="grid place-items-center w-10 h-10 rounded-lg text-slate-600 hover:bg-slate-50" aria-label={t("web.action.toggle_menu")} aria-expanded={mobileOpen}><MenuIcon className="w-5 h-5"/></button></div>
       <div className="hidden lg:flex items-center gap-2 px-4 min-w-0"><span className="gerege-session-dot w-2 h-2 rounded-full shrink-0"/><strong className="text-base text-slate-800 font-semibold truncate max-w-56">{user?.tenant_name||"Demo Tenant"}</strong></div>
