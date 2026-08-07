@@ -3,45 +3,52 @@
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
- * Package developer_portal implements Developer Apps & OAuth2 SSO Client Portal Go module (io.example.developer_portal).
+ * Package developer_portal implements the Developer Apps & OAuth2 SSO client
+ * portal (io.example.developer_portal): the tenant-facing management surface
+ * for the OAuth2 clients that platform.ssoprovider then authenticates.
  */
 
 package developer_portal
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
+	"net/url"
+	"slices"
+	"strings"
 
 	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal"
 	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/auth"
 	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/ssoprovider"
 	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
 )
 
 type DeveloperPortalModule struct {
-	ssoProvider *ssoprovider.SSOProvider
+	sso *ssoprovider.SSOProvider
 }
 
-// NewDeveloperPortalModule builds the module and registers it in the compile-time app registry.
-func NewDeveloperPortalModule(ssoProvider *ssoprovider.SSOProvider) *DeveloperPortalModule {
-	m := &DeveloperPortalModule{
-		ssoProvider: ssoProvider,
-	}
+// NewDeveloperPortalModule builds the module and registers it in the
+// compile-time app registry.
+func NewDeveloperPortalModule(sso *ssoprovider.SSOProvider) *DeveloperPortalModule {
+	m := &DeveloperPortalModule{sso: sso}
 	appregistry.Register(m)
 	return m
 }
 
 func (m *DeveloperPortalModule) ID() string      { return "io.example.developer_portal" }
 func (m *DeveloperPortalModule) Name() string    { return "Developer Portal & OAuth2 SSO" }
-func (m *DeveloperPortalModule) Version() string { return "1.0.0" }
+func (m *DeveloperPortalModule) Version() string { return "2.0.0" }
 
 func (m *DeveloperPortalModule) Dependencies() []internal.Dependency { return nil }
 
 func (m *DeveloperPortalModule) Permissions() []internal.PermissionDefinition {
 	return []internal.PermissionDefinition{
 		{Code: "developer.read", Name: "Read Developer Apps", Description: "View registered OAuth2 client applications"},
-		{Code: "developer.manage", Name: "Manage Developer Apps", Description: "Register and configure OAuth2 client applications"},
+		{Code: "developer.manage", Name: "Manage Developer Apps", Description: "Register, configure and revoke OAuth2 client applications"},
 	}
 }
 
@@ -51,62 +58,406 @@ func (m *DeveloperPortalModule) Menus() []internal.MenuDefinition {
 	}
 }
 
+// RegisterRoutes mounts the portal API. The gate middleware carries both the
+// app installation check and the developer.read / developer.manage permission
+// split, which platform.appRequestPermission derives from the HTTP method.
 func (m *DeveloperPortalModule) RegisterRoutes(r chi.Router, tenantAuthMiddleware func(http.Handler) http.Handler) {
-	r.Route("/api/v1/developer/apps", func(dr chi.Router) {
+	r.Route("/api/v1/developer", func(dr chi.Router) {
 		dr.Use(tenantAuthMiddleware)
-		dr.Get("/", m.handleListApps)
-		dr.Post("/", m.handleCreateApp)
+
+		dr.Get("/scopes", m.handleListScopes)
+		dr.Get("/endpoints", m.handleEndpoints)
+
+		dr.Route("/apps", func(ar chi.Router) {
+			ar.Get("/", m.handleListApps)
+			ar.Post("/", m.handleCreateApp)
+			ar.Get("/{clientID}", m.handleGetApp)
+			ar.Put("/{clientID}", m.handleUpdateApp)
+			ar.Delete("/{clientID}", m.handleDeleteApp)
+			ar.Post("/{clientID}/rotate-secret", m.handleRotateSecret)
+		})
 	})
 }
 
+// handleListApps returns the clients belonging to the caller's tenant.
+//
+// The previous implementation read the tenant out of the context, threw it
+// away, and then called a provider method that returned every client on the
+// platform — so any tenant could enumerate every other tenant's integrations.
 func (m *DeveloperPortalModule) handleListApps(w http.ResponseWriter, r *http.Request) {
-	_, err := tenant.FromContext(r.Context())
+	tenantID, err := tenant.FromContext(r.Context())
 	if err != nil {
-		http.Error(w, `{"error":"unauthorized tenant context"}`, http.StatusUnauthorized)
+		unauthorized(w)
 		return
 	}
 
-	clients := m.ssoProvider.ListClients()
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(clients)
+	clients, err := m.sso.Store().ListClients(r.Context(), tenantID)
+	if err != nil {
+		slog.Error("failed to list oauth2 clients", "error", err, "tenant_id", tenantID)
+		writeError(w, http.StatusInternalServerError, "could not load applications")
+		return
+	}
+	writeJSON(w, http.StatusOK, clients)
+}
+
+func (m *DeveloperPortalModule) handleGetApp(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := tenant.FromContext(r.Context())
+	if err != nil {
+		unauthorized(w)
+		return
+	}
+
+	client, err := m.sso.Store().GetTenantClient(r.Context(), tenantID, chi.URLParam(r, "clientID"))
+	if errors.Is(err, ssoprovider.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "application not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not load the application")
+		return
+	}
+	writeJSON(w, http.StatusOK, client)
+}
+
+// appRequest is the create/update payload.
+type appRequest struct {
+	ClientName   string   `json:"client_name"`
+	ClientURI    string   `json:"client_uri"`
+	LogoURI      string   `json:"logo_uri"`
+	ClientType   string   `json:"client_type"`
+	RedirectURIs []string `json:"redirect_uris"`
+	GrantTypes   []string `json:"grant_types"`
+	Scopes       []string `json:"scopes"`
+	Disabled     bool     `json:"disabled"`
 }
 
 func (m *DeveloperPortalModule) handleCreateApp(w http.ResponseWriter, r *http.Request) {
-	_, err := tenant.FromContext(r.Context())
+	tenantID, err := tenant.FromContext(r.Context())
 	if err != nil {
-		http.Error(w, `{"error":"unauthorized tenant context"}`, http.StatusUnauthorized)
+		unauthorized(w)
+		return
+	}
+	claims, _ := auth.UserFromContext(r.Context())
+
+	var req appRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
-	var req struct {
-		ClientName   string   `json:"client_name"`
-		RedirectURIs []string `json:"redirect_uris"`
-		Scopes       []string `json:"scopes"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid payload"}`, http.StatusBadRequest)
+	normalised, verr := normalise(&req)
+	if verr != nil {
+		writeError(w, http.StatusBadRequest, verr.Error())
 		return
 	}
 
-	if req.ClientName == "" {
-		http.Error(w, `{"error":"client_name is required"}`, http.StatusBadRequest)
+	client := &ssoprovider.Client{
+		TenantID:     tenantID,
+		ClientID:     "app_" + strings.ToLower(slugify(req.ClientName)) + "_" + ssoprovider.NewIdentifier(8),
+		ClientName:   normalised.ClientName,
+		ClientURI:    normalised.ClientURI,
+		LogoURI:      normalised.LogoURI,
+		ClientType:   normalised.ClientType,
+		RedirectURIs: normalised.RedirectURIs,
+		GrantTypes:   normalised.GrantTypes,
+		Scopes:       normalised.Scopes,
+	}
+
+	// A public client is issued no secret at all: PKCE stands in for it,
+	// because a secret embedded in a mobile app or an SPA is readable by
+	// anyone who downloads it.
+	var secret, secretHash string
+	if client.ClientType != "public" {
+		secret = "sec_" + ssoprovider.NewIdentifier(48)
+		secretHash = ssoprovider.HashSecret(secret)
+	}
+
+	created, err := m.sso.Store().CreateClient(r.Context(), client, secretHash, claims.UserID)
+	if err != nil {
+		slog.Error("failed to create an oauth2 client", "error", err, "tenant_id", tenantID)
+		writeError(w, http.StatusInternalServerError, "could not register the application")
 		return
 	}
 
-	if len(req.Scopes) == 0 {
-		req.Scopes = []string{"openid", "profile", "erp.read"}
+	// The only time the secret is ever readable. Every later read redacts it,
+	// because the database holds a digest and cannot reproduce it.
+	created.Secret = secret
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (m *DeveloperPortalModule) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := tenant.FromContext(r.Context())
+	if err != nil {
+		unauthorized(w)
+		return
 	}
 
-	client := &ssoprovider.OAuth2Client{
-		ClientName:   req.ClientName,
-		RedirectURIs: req.RedirectURIs,
-		Scopes:       req.Scopes,
-		GrantTypes:   []string{"authorization_code", "client_credentials"},
+	existing, err := m.sso.Store().GetTenantClient(r.Context(), tenantID, chi.URLParam(r, "clientID"))
+	if errors.Is(err, ssoprovider.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "application not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not load the application")
+		return
 	}
 
-	m.ssoProvider.RegisterClient(client)
+	var req appRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+	// The client type is fixed at registration: flipping a public client to
+	// confidential would leave it with no secret, and the other direction
+	// would leave a secret in a binary that cannot keep one.
+	req.ClientType = existing.ClientType
 
+	normalised, verr := normalise(&req)
+	if verr != nil {
+		writeError(w, http.StatusBadRequest, verr.Error())
+		return
+	}
+
+	existing.ClientName = normalised.ClientName
+	existing.ClientURI = normalised.ClientURI
+	existing.LogoURI = normalised.LogoURI
+	existing.RedirectURIs = normalised.RedirectURIs
+	existing.GrantTypes = normalised.GrantTypes
+	existing.Scopes = normalised.Scopes
+	existing.Disabled = req.Disabled
+
+	updated, err := m.sso.Store().UpdateClient(r.Context(), tenantID, existing)
+	if err != nil {
+		slog.Error("failed to update an oauth2 client", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not update the application")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (m *DeveloperPortalModule) handleDeleteApp(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := tenant.FromContext(r.Context())
+	if err != nil {
+		unauthorized(w)
+		return
+	}
+
+	err = m.sso.Store().DeleteClient(r.Context(), tenantID, chi.URLParam(r, "clientID"))
+	if errors.Is(err, ssoprovider.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "application not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete the application")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRotateSecret issues a fresh secret and invalidates the old one. There
+// was no way to do this before: a leaked secret meant deleting the integration
+// and re-registering it under a new client_id.
+func (m *DeveloperPortalModule) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := tenant.FromContext(r.Context())
+	if err != nil {
+		unauthorized(w)
+		return
+	}
+
+	clientID := chi.URLParam(r, "clientID")
+	client, err := m.sso.Store().GetTenantClient(r.Context(), tenantID, clientID)
+	if errors.Is(err, ssoprovider.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "application not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not load the application")
+		return
+	}
+	if client.IsPublic() {
+		writeError(w, http.StatusBadRequest, "a public client has no secret to rotate")
+		return
+	}
+
+	secret := "sec_" + ssoprovider.NewIdentifier(48)
+	if err := m.sso.Store().RotateClientSecret(r.Context(), tenantID, clientID, ssoprovider.HashSecret(secret)); err != nil {
+		slog.Error("failed to rotate a client secret", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not rotate the secret")
+		return
+	}
+
+	client.Secret = secret
+	writeJSON(w, http.StatusOK, client)
+}
+
+// handleListScopes gives the portal's scope picker the same vocabulary the
+// consent screen renders, so the two cannot drift.
+func (m *DeveloperPortalModule) handleListScopes(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"scopes":      ssoprovider.SupportedScopes,
+		"grant_types": ssoprovider.SupportedGrantTypes,
+	})
+}
+
+// handleEndpoints hands the portal the exact URLs an integrator has to paste
+// into their client library, rather than making them assemble the origin.
+func (m *DeveloperPortalModule) handleEndpoints(w http.ResponseWriter, r *http.Request) {
+	issuer := m.sso.Issuer()
+	writeJSON(w, http.StatusOK, map[string]string{
+		"issuer":                 issuer,
+		"discovery":              issuer + "/.well-known/openid-configuration",
+		"jwks_uri":               issuer + "/.well-known/jwks.json",
+		"authorization_endpoint": issuer + "/oauth2/auth",
+		"token_endpoint":         issuer + "/oauth2/token",
+		"userinfo_endpoint":      issuer + "/oauth2/userinfo",
+		"introspection_endpoint": issuer + "/oauth2/introspect",
+		"revocation_endpoint":    issuer + "/oauth2/revoke",
+	})
+}
+
+// normalise validates and cleans a create/update payload.
+func normalise(req *appRequest) (*appRequest, error) {
+	out := &appRequest{
+		ClientName: strings.TrimSpace(req.ClientName),
+		ClientURI:  strings.TrimSpace(req.ClientURI),
+		LogoURI:    strings.TrimSpace(req.LogoURI),
+		ClientType: strings.TrimSpace(req.ClientType),
+	}
+
+	if out.ClientName == "" {
+		return nil, errors.New("client_name is required")
+	}
+	if len(out.ClientName) > 200 {
+		return nil, errors.New("client_name is too long")
+	}
+
+	if out.ClientType == "" {
+		out.ClientType = "confidential"
+	}
+	if out.ClientType != "confidential" && out.ClientType != "public" {
+		return nil, errors.New("client_type must be confidential or public")
+	}
+
+	if out.GrantTypes = dedupe(req.GrantTypes); len(out.GrantTypes) == 0 {
+		out.GrantTypes = []string{"authorization_code", "refresh_token"}
+	}
+	for _, grant := range out.GrantTypes {
+		if !slices.Contains(ssoprovider.SupportedGrantTypes, grant) {
+			return nil, errors.New("unsupported grant type: " + grant)
+		}
+		if grant == "client_credentials" && out.ClientType == "public" {
+			return nil, errors.New("a public client cannot use client_credentials: it has no secret to prove with")
+		}
+	}
+
+	if out.Scopes = dedupe(req.Scopes); len(out.Scopes) == 0 {
+		out.Scopes = []string{"openid", "profile", "erp.read"}
+	}
+	for _, scope := range out.Scopes {
+		if !ssoprovider.IsSupportedScope(scope) {
+			return nil, errors.New("unknown scope: " + scope)
+		}
+	}
+
+	out.RedirectURIs = dedupe(req.RedirectURIs)
+	if slices.Contains(out.GrantTypes, "authorization_code") && len(out.RedirectURIs) == 0 {
+		return nil, errors.New("authorization_code requires at least one redirect_uri")
+	}
+	for _, raw := range out.RedirectURIs {
+		if err := validateRedirectURI(raw, out.ClientType); err != nil {
+			return nil, err
+		}
+	}
+	for _, raw := range []string{out.ClientURI, out.LogoURI} {
+		if raw == "" {
+			continue
+		}
+		if parsed, err := url.Parse(raw); err != nil || !parsed.IsAbs() {
+			return nil, errors.New("client_uri and logo_uri must be absolute URLs")
+		}
+	}
+
+	return out, nil
+}
+
+// validateRedirectURI enforces what the authorization endpoint will later match
+// against. Nothing was checked before, so a client could be registered with a
+// redirect target the flow would refuse — or worse, accept.
+func validateRedirectURI(raw, clientType string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil || !parsed.IsAbs() {
+		return errors.New("redirect_uri must be an absolute URL: " + raw)
+	}
+	// A fragment is never sent to the server and cannot be matched, so a
+	// registration carrying one is a mistake worth naming now.
+	if parsed.Fragment != "" || strings.Contains(raw, "#") {
+		return errors.New("redirect_uri must not contain a fragment: " + raw)
+	}
+	if strings.Contains(raw, "*") {
+		return errors.New("wildcards are not allowed in a redirect_uri: " + raw)
+	}
+
+	switch parsed.Scheme {
+	case "https":
+		return nil
+	case "http":
+		// Plain HTTP is only ever safe on the loopback interface, which is how
+		// native apps and local development receive the redirect.
+		host := parsed.Hostname()
+		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+			return nil
+		}
+		return errors.New("redirect_uri must use https outside localhost: " + raw)
+	default:
+		// Custom schemes (com.example.app:/callback) are how a mobile app
+		// receives a redirect, and are meaningful only for public clients.
+		if clientType == "public" {
+			return nil
+		}
+		return errors.New("a confidential client's redirect_uri must be http(s): " + raw)
+	}
+}
+
+func dedupe(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v != "" && !slices.Contains(out, v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// slugify turns an application name into the readable half of its client_id.
+func slugify(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(name) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '-' || r == '_':
+			if b.Len() > 0 && !strings.HasSuffix(b.String(), "-") {
+				b.WriteRune('-')
+			}
+		}
+		if b.Len() >= 24 {
+			break
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(client)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func unauthorized(w http.ResponseWriter) {
+	writeError(w, http.StatusUnauthorized, "unauthorized tenant context")
 }

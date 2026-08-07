@@ -19,7 +19,10 @@ const iconMap: Record<string, React.ReactNode> = {
   "credit-card":<CreditCard className="w-5 h-5"/>, "file-text":<FileText className="w-5 h-5"/>, code:<Code2 className="w-5 h-5"/>, landmark:<Landmark className="w-5 h-5"/>,
   "pen-tool":<PenTool className="w-5 h-5"/>,
 };
-const PUBLIC_ROUTES=["/","/login","/auth/eid/callback"];
+// Routes that render without the ERP chrome. /oauth/consent is signed-in but
+// belongs here too: it is an identity handoff to another product, and framing
+// it in this one's navigation invites the user to wander off mid-flow.
+const PUBLIC_ROUTES=["/","/login","/auth/eid/callback","/oauth/consent"];
 const APP_ORDER=["io.example.contacts","io.example.products","io.example.inventory","io.example.billing","io.example.documents","io.example.esign","io.example.developer_portal","io.example.gov_services"];
 
 export default function Layout({children}:{children:React.ReactNode}){

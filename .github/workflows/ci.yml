@@ -61,6 +61,7 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
       GOV_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
+      OAUTH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -82,6 +83,17 @@ jobs:
             | tee /tmp/gov.log
           if grep -q -- '--- SKIP' /tmp/gov.log; then
             echo "::error::gov_services integration tests skipped — GOV_TEST_DATABASE_URL is not reaching the test"
+            exit 1
+          fi
+      - name: Fail if the OAuth2 flow tests were skipped
+        # Same reasoning: single-use codes, refresh rotation and tenant
+        # isolation are enforced in SQL, so a skipped suite means those
+        # guarantees went untested rather than that they held.
+        run: |
+          go test -run 'TestAuthorizationCodeFlowEndToEnd' -v ./internal/platform/ssoprovider/... \
+            | tee /tmp/oauth.log
+          if grep -q -- '--- SKIP' /tmp/oauth.log; then
+            echo "::error::OAuth2 flow tests skipped — OAUTH_TEST_DATABASE_URL is not reaching the test"
             exit 1
           fi
 

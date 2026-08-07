@@ -147,6 +147,16 @@ func TokenFromRequest(r *http.Request) string {
 }
 
 // SetSessionCookie writes the session cookie with hardened attributes.
+//
+// SameSite is Lax rather than Strict because this deployment is an SSO
+// provider: a relying party sends the browser to /oauth2/auth as a top-level
+// cross-site navigation, and Strict withholds the cookie on exactly that
+// request — every sign-in handoff would land on the login screen even for a
+// user with a live session.
+//
+// Lax still withholds the cookie from cross-site POSTs and subresource loads,
+// which is where CSRF lives. Nothing on this API changes state through a GET,
+// so the difference costs no protection.
 func SetSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
@@ -155,7 +165,7 @@ func SetSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) 
 		Expires:  expiresAt,
 		HttpOnly: true,
 		Secure:   IsProduction(),
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 
@@ -168,7 +178,9 @@ func ClearSessionCookie(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   IsProduction(),
-		SameSite: http.SameSiteStrictMode,
+		// Must match SetSessionCookie's attributes or the browser treats this
+		// as a different cookie and leaves the original in place.
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 
