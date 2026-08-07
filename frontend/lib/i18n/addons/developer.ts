@@ -46,6 +46,58 @@ export const developer = {
   "developer.message.never_used": { mn: "хараахан ашиглаагүй", en: "never used" },
   "developer.message.pkce_note": { mn: "Бүх урсгалд PKCE (S256) заавал шаардана.", en: "PKCE (S256) is required on every flow." },
 
+  // API keys — machine credentials
+  "developer.keys.title": { mn: "API түлхүүр", en: "API keys" },
+  "developer.keys.subtitle": { mn: "Хүнгүйгээр ажиллах систем хоорондын холболтын нэвтрэх мэдээлэл", en: "Credentials for system-to-system calls that run without a person" },
+  "developer.keys.explainer": { mn: "API түлхүүр гэдэг нь client_credentials урсгал ашигладаг нууцлагдсан client юм. Тусдаа механизм биш — та ижил client_id/secret хосыг /oauth2/token руу илгээж токен авна.", en: "An API key here is a confidential client using the client_credentials grant. It is not a separate mechanism: you exchange the same client_id/secret pair at /oauth2/token for a token." },
+  "developer.keys.empty": { mn: "Машины нэвтрэх мэдээлэл алга", en: "No machine credentials yet" },
+  "developer.keys.create": { mn: "API түлхүүр үүсгэх", en: "Create API key" },
+  "developer.keys.curl": { mn: "Токен авах жишээ", en: "Exchange it for a token" },
+
+  // Access audit
+  "developer.audit.title": { mn: "Хандалтын аудит", en: "Access audit" },
+  "developer.audit.subtitle": { mn: "Танай аппуудын олгосон амьд токен ба хэрэглэгчийн зөвшөөрөл", en: "Live tokens and standing user consents your applications hold" },
+  "developer.audit.active_access": { mn: "Амьд access", en: "Live access" },
+  "developer.audit.active_refresh": { mn: "Амьд refresh", en: "Live refresh" },
+  "developer.audit.consented": { mn: "Зөвшөөрсөн хэрэглэгч", en: "Consented users" },
+  "developer.audit.revoke_tokens": { mn: "Бүх токен цуцлах", en: "Revoke all tokens" },
+  "developer.audit.revoke_warning": { mn: "Энэ аппын олгосон бүх амьд токен тэр дороо хүчингүй болно. Бүртгэл нь үлдэх тул интеграц дахин нэвтэрч болно.", en: "Every live token this application holds stops working immediately. The registration survives, so the integration can authenticate again." },
+  "developer.audit.revoked_count": { mn: "{n} токен цуцлагдлаа", en: "{n} token(s) revoked" },
+  "developer.audit.consents_title": { mn: "Хэрэглэгчийн зөвшөөрөл", en: "User consents" },
+  "developer.audit.withdraw": { mn: "Зөвшөөрөл цуцлах", en: "Withdraw" },
+  "developer.audit.withdraw_warning": { mn: "Энэ хэрэглэгчийн зөвшөөрөл болон түүгээр олгосон токенууд устана. Апп дараагийн удаа дахин зөвшөөрөл асууна.", en: "This user's grant and the tokens issued under it are removed. The application will ask for consent again next time." },
+  "developer.audit.no_consents": { mn: "Одоогоор ямар ч хэрэглэгч зөвшөөрөл өгөөгүй байна.", en: "No user has granted consent yet." },
+  "developer.audit.no_activity": { mn: "Аудит харуулах апп алга.", en: "No applications to audit." },
+
+  // OAuth scopes
+  "developer.scopes.title": { mn: "OAuth scope", en: "OAuth scopes" },
+  "developer.scopes.subtitle": { mn: "Апп хэрэглэгчээс юу гуйж болох, тэдгээрийг хэн ашиглаж байгаа", en: "What an application may ask a user for, and which of yours ask for it" },
+  "developer.scopes.used_by": { mn: "Ашиглаж буй апп", en: "Requested by" },
+  "developer.scopes.unused": { mn: "хэн ч ашиглахгүй байна", en: "not requested by any application" },
+  "developer.scopes.sensitive_note": { mn: "Эмзэг scope нь зөвшөөрлийн дэлгэц дээр тусад нь тэмдэглэгдэнэ.", en: "Sensitive scopes are called out separately on the consent screen." },
+  "developer.scopes.consent_preview": { mn: "Хэрэглэгч ингэж харна:", en: "The user reads it as:" },
+
+  // Redirect policy
+  "developer.redirects.title": { mn: "Redirect бодлого", en: "Redirect policies" },
+  "developer.redirects.subtitle": { mn: "Бүртгэлтэй бүх redirect URI ба тэдгээрийн дагах ёстой дүрэм", en: "Every registered redirect URI and the rules they have to satisfy" },
+  "developer.redirects.rules_title": { mn: "Хүчинтэй байх нөхцөл", en: "What is enforced" },
+  "developer.redirects.rule_exact": { mn: "Яг тэнцүү тааруулалт — prefix ч биш, wildcard ч биш. Тааруулалт сул байвал халдагч кодыг өөр рүүгээ хүргүүлж чадна.", en: "Exact match — not a prefix, not a wildcard. Loose matching is how an attacker has a code delivered somewhere else." },
+  "developer.redirects.rule_https": { mn: "localhost-оос бусад тохиолдолд заавал https.", en: "https everywhere except localhost." },
+  "developer.redirects.rule_fragment": { mn: "Fragment (#) агуулж болохгүй — сервер рүү илгээгддэггүй тул тааруулах боломжгүй.", en: "No fragment (#): it is never sent to the server, so it cannot be matched." },
+  "developer.redirects.rule_custom": { mn: "Мобайл аппын өөрийн scheme (com.example.app:/cb) зөвхөн нээлттэй клиентэд.", en: "A custom mobile scheme (com.example.app:/cb) is accepted for public clients only." },
+  "developer.redirects.loopback": { mn: "Loopback — зөвхөн хөгжүүлэлтэд", en: "Loopback — development only" },
+  "developer.redirects.none": { mn: "Бүртгэлтэй redirect URI алга.", en: "No redirect URIs registered." },
+  "developer.redirects.no_redirect_needed": { mn: "Зөвхөн машины урсгал — redirect шаардлагагүй", en: "Machine-only flow — no redirect needed" },
+
+  // Signing keys
+  "developer.signing.title": { mn: "Гарын үсгийн түлхүүр", en: "Signing keys" },
+  "developer.signing.subtitle": { mn: "id_token-д гарын үсэг зурдаг түлхүүрүүд ба тэдгээрийг нийтэлдэг JWKS хаяг", en: "The keys that sign id_tokens, and the JWKS that publishes them" },
+  "developer.signing.explainer": { mn: "Клиент та id_token-ыг доорх JWKS-ээс түлхүүрийг татаж шалгана. Токены толгойн kid аль түлхүүрийг ашигласныг заана. Хувийн түлхүүр энд ч, API-аар ч хэзээ ч гардаггүй.", en: "A client verifies an id_token by fetching a key from the JWKS below. The token header's kid says which one was used. The private half is never shown here, nor exposed by any API." },
+  "developer.signing.active": { mn: "Идэвхтэй — гарын үсэг зурж байна", en: "Active — currently signing" },
+  "developer.signing.retired": { mn: "Тэтгэвэрт — зөвхөн шалгахад", en: "Retired — verification only" },
+  "developer.signing.none": { mn: "Түлхүүр хараахан үүсээгүй. Эхний id_token гаргах үед автоматаар үүснэ.", en: "No key yet. One is generated the first time an id_token is issued." },
+  "developer.signing.retired_note": { mn: "Тэтгэвэрт гарсан түлхүүр нь түүгээр гарын үсэг зурсан токенууд дуусах хүртэл JWKS-д үлдэнэ.", en: "A retired key stays in the JWKS until every token it signed has expired." },
+
   // Consent screen
   "oauth.consent.title": { mn: "Нэвтрэх зөвшөөрөл", en: "Authorize access" },
   "oauth.consent.lede": { mn: "{app} таны Gerege бүртгэлээр нэвтрэхийг хүсэж байна.", en: "{app} wants to sign you in with your Gerege account." },

@@ -68,6 +68,9 @@ func (m *DeveloperPortalModule) RegisterRoutes(r chi.Router, tenantAuthMiddlewar
 		dr.Get("/scopes", m.handleListScopes)
 		dr.Get("/endpoints", m.handleEndpoints)
 
+		dr.Get("/audit", m.handleAudit)
+		dr.Get("/signing-keys", m.handleSigningKeys)
+
 		dr.Route("/apps", func(ar chi.Router) {
 			ar.Get("/", m.handleListApps)
 			ar.Post("/", m.handleCreateApp)
@@ -75,6 +78,10 @@ func (m *DeveloperPortalModule) RegisterRoutes(r chi.Router, tenantAuthMiddlewar
 			ar.Put("/{clientID}", m.handleUpdateApp)
 			ar.Delete("/{clientID}", m.handleDeleteApp)
 			ar.Post("/{clientID}/rotate-secret", m.handleRotateSecret)
+			// Revocation is a mutation, so the gate middleware maps it to
+			// developer.manage the same way a delete is.
+			ar.Delete("/{clientID}/tokens", m.handleRevokeTokens)
+			ar.Delete("/{clientID}/consents/{userID}", m.handleWithdrawConsent)
 		})
 	})
 }
@@ -288,6 +295,103 @@ func (m *DeveloperPortalModule) handleRotateSecret(w http.ResponseWriter, r *htt
 
 	client.Secret = secret
 	writeJSON(w, http.StatusOK, client)
+}
+
+// handleAudit reports what this tenant's clients are actually doing: live
+// tokens, standing consents, and when each credential was last exchanged.
+//
+// A credential nobody has used in months is the one worth deleting, and a
+// consent nobody remembers granting is the one worth withdrawing; neither was
+// visible anywhere before.
+func (m *DeveloperPortalModule) handleAudit(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := tenant.FromContext(r.Context())
+	if err != nil {
+		unauthorized(w)
+		return
+	}
+
+	activity, err := m.sso.Store().ClientActivityByTenant(r.Context(), tenantID)
+	if err != nil {
+		slog.Error("failed to load oauth2 client activity", "error", err, "tenant_id", tenantID)
+		writeError(w, http.StatusInternalServerError, "could not load activity")
+		return
+	}
+	consents, err := m.sso.Store().ConsentsByTenant(r.Context(), tenantID, 200)
+	if err != nil {
+		slog.Error("failed to load oauth2 consents", "error", err, "tenant_id", tenantID)
+		writeError(w, http.StatusInternalServerError, "could not load consents")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"clients": activity, "consents": consents})
+}
+
+// handleRevokeTokens invalidates every live token a client holds without
+// deleting the registration, so a suspected leak can be contained while the
+// integration keeps its client_id.
+func (m *DeveloperPortalModule) handleRevokeTokens(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := tenant.FromContext(r.Context())
+	if err != nil {
+		unauthorized(w)
+		return
+	}
+
+	clientID := chi.URLParam(r, "clientID")
+	if _, err := m.sso.Store().GetTenantClient(r.Context(), tenantID, clientID); err != nil {
+		writeError(w, http.StatusNotFound, "application not found")
+		return
+	}
+
+	revoked, err := m.sso.Store().RevokeClientTokens(r.Context(), tenantID, clientID)
+	if err != nil {
+		slog.Error("failed to revoke client tokens", "error", err, "client_id", clientID)
+		writeError(w, http.StatusInternalServerError, "could not revoke tokens")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"revoked": revoked})
+}
+
+// handleWithdrawConsent removes one user's standing grant to a client.
+func (m *DeveloperPortalModule) handleWithdrawConsent(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := tenant.FromContext(r.Context())
+	if err != nil {
+		unauthorized(w)
+		return
+	}
+
+	err = m.sso.Store().WithdrawConsent(r.Context(), tenantID,
+		chi.URLParam(r, "clientID"), chi.URLParam(r, "userID"))
+	if errors.Is(err, ssoprovider.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "consent not found")
+		return
+	}
+	if err != nil {
+		slog.Error("failed to withdraw consent", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not withdraw the consent")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleSigningKeys lists the keys the JWKS publishes, so an integrator can see
+// which kid their library should be pinning and when it appeared. Only public
+// metadata: the query never selects the private half.
+func (m *DeveloperPortalModule) handleSigningKeys(w http.ResponseWriter, r *http.Request) {
+	if _, err := tenant.FromContext(r.Context()); err != nil {
+		unauthorized(w)
+		return
+	}
+
+	keys, err := m.sso.Store().SigningKeys(r.Context())
+	if err != nil {
+		slog.Error("failed to load signing keys", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not load signing keys")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"keys":     keys,
+		"jwks_uri": m.sso.Issuer() + "/.well-known/jwks.json",
+	})
 }
 
 // handleListScopes gives the portal's scope picker the same vocabulary the

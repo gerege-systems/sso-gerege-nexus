@@ -415,6 +415,19 @@ export const api = {
   getDeveloperScopes: () =>
     fetcher<{ scopes: OAuth2Scope[]; grant_types: string[] }>("/developer/scopes"),
   getDeveloperEndpoints: () => fetcher<Record<string, string>>("/developer/endpoints"),
+  getDeveloperSigningKeys: () =>
+    fetcher<{ keys: SigningKey[]; jwks_uri: string }>("/developer/signing-keys"),
+  getDeveloperAudit: () =>
+    fetcher<{ clients: ClientActivity[]; consents: ConsentRecord[] }>("/developer/audit"),
+  revokeDeveloperAppTokens: (clientID: string) =>
+    fetcher<{ revoked: number }>(`/developer/apps/${encodeURIComponent(clientID)}/tokens`, {
+      method: "DELETE",
+    }),
+  withdrawDeveloperConsent: (clientID: string, userID: string) =>
+    fetcher<void>(
+      `/developer/apps/${encodeURIComponent(clientID)}/consents/${encodeURIComponent(userID)}`,
+      { method: "DELETE" },
+    ),
 
   // OAuth2 consent screen. The query string is the authorization request the
   // browser arrived with; the server re-validates all of it rather than
@@ -464,6 +477,35 @@ export type OAuth2Client = {
   last_used_at?: string;
   /** Present only in the response that created or rotated it. */
   client_secret?: string;
+};
+
+export type SigningKey = {
+  kid: string;
+  algorithm: string;
+  active: boolean;
+  created_at: string;
+  retired_at?: string;
+};
+
+export type ClientActivity = {
+  client_id: string;
+  client_name: string;
+  client_type: "confidential" | "public";
+  disabled: boolean;
+  active_access_tokens: number;
+  active_refresh_tokens: number;
+  consented_users: number;
+  last_used_at?: string;
+};
+
+export type ConsentRecord = {
+  client_id: string;
+  client_name: string;
+  user_id: string;
+  user_email: string;
+  user_name: string;
+  scopes: string[];
+  granted_at: string;
 };
 
 export type ConsentPrompt = {
