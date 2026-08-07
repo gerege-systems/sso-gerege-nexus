@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { AdminOnly, useAccess } from "@/lib/permissions";
 import { BrainCircuit, BookOpen, Save, Plus } from "lucide-react";
 
 type Prompt = { key: string; content: string; active: boolean; global: boolean };
@@ -10,6 +11,9 @@ type Knowledge = { id: string; title: string; content: string; source_url: strin
 
 export default function AISettings() {
   const { t } = useI18n();
+  // Prompts and the knowledge base are administrator-only server-side; without
+  // this the screen loaded, failed, and printed the raw 403 string as a notice.
+  const { loading: checking, isAdmin } = useAccess();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
   const [notice, setNotice] = useState("");
@@ -42,13 +46,21 @@ export default function AISettings() {
     await load();
   }
 
+  const heading = (
+    <header>
+      <p className="text-xs font-semibold uppercase tracking-widest text-[var(--gerege-blue)]">Gemini AI</p>
+      <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><BrainCircuit />{t("ai.view.settings_title")}</h1>
+      <p className="text-sm text-slate-500">{t("ai.view.settings_subtitle")}</p>
+    </header>
+  );
+
+  if (!checking && !isAdmin) {
+    return <div className="w-full space-y-6">{heading}<AdminOnly /></div>;
+  }
+
   return (
     <div className="w-full space-y-6">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-widest text-[var(--gerege-blue)]">Gemini AI</p>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><BrainCircuit />{t("ai.view.settings_title")}</h1>
-        <p className="text-sm text-slate-500">{t("ai.view.settings_subtitle")}</p>
-      </header>
+      {heading}
 
       {notice && <div className="rounded-lg bg-[var(--gerege-blue-soft)] text-[var(--gerege-blue)] p-3 text-sm">{notice}</div>}
 

@@ -13,7 +13,8 @@ import { ScrollText, ShieldOff, UserMinus, Users } from "lucide-react";
 import { api, type ClientActivity, type ConsentRecord } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
-  Chip, ConfirmDialog, Empty, ErrorNote, Loading, Panel, Screen, relativeDate,
+  Chip, ConfirmDialog, Empty, ErrorNote, Loading, Panel, ReadOnlyNote, Screen,
+  relativeDate, useAccess,
 } from "../shared";
 
 type Pending =
@@ -22,6 +23,8 @@ type Pending =
 
 export default function AccessAuditPage() {
   const { t, locale } = useI18n();
+  // Revoking a token and withdrawing a consent are both mutations.
+  const { allowed: canManage } = useAccess("developer.manage");
   const [clients, setClients] = useState<ClientActivity[]>([]);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +72,7 @@ export default function AccessAuditPage() {
       title={t("developer.audit.title")}
       subtitle={t("developer.audit.subtitle")}
     >
+      {!canManage && <ReadOnlyNote permission="developer.manage" />}
       {error && <ErrorNote>{error}</ErrorNote>}
       {notice && (
         <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
@@ -119,7 +123,8 @@ export default function AccessAuditPage() {
                       <td className="px-4 py-3 text-right">
                         <button
                           onClick={() => setPending({ kind: "tokens", client })}
-                          disabled={live === 0}
+                          disabled={live === 0 || !canManage}
+                          hidden={!canManage}
                           className="text-xs font-semibold text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-30 disabled:hover:bg-transparent"
                         >
                           <ShieldOff className="w-3.5 h-3.5" /> {t("developer.audit.revoke_tokens")}
@@ -159,6 +164,7 @@ export default function AccessAuditPage() {
                 </div>
                 <button
                   onClick={() => setPending({ kind: "consent", consent })}
+                  hidden={!canManage}
                   className="text-xs font-semibold text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
                 >
                   <UserMinus className="w-3.5 h-3.5" /> {t("developer.audit.withdraw")}

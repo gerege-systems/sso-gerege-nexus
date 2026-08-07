@@ -72,10 +72,13 @@ export default function Layout({children}:{children:React.ReactNode}){
   if(loading)return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-medium">{t("web.message.loading_platform")}</div>;
 
   const platformMenus=<><MenuGroup title={t("web.group.modules")}>
-    <NavLink href="/apps" active={pathname==="/apps"} icon={<LayoutGrid className="w-5 h-5"/>} label={t("web.menu.app_store")}/><NavLink href="/settings/apps" active={pathname==="/settings/apps"} icon={<Settings className="w-5 h-5"/>} label={t("web.menu.installed_apps")}/><NavLink href="/settings/ai" active={pathname==="/settings/ai"} icon={<BrainCircuit className="w-5 h-5"/>} label={t("web.menu.ai_settings")}/>
+    <NavLink href="/apps" active={pathname==="/apps"} icon={<LayoutGrid className="w-5 h-5"/>} label={t("web.menu.app_store")}/><NavLink href="/settings/apps" active={pathname==="/settings/apps"} icon={<Settings className="w-5 h-5"/>} label={t("web.menu.installed_apps")}/>{user?.is_admin&&<NavLink href="/settings/ai" active={pathname==="/settings/ai"} icon={<BrainCircuit className="w-5 h-5"/>} label={t("web.menu.ai_settings")}/>}
   </MenuGroup><MenuGroup title={t("web.group.settings")}>
     <NavLink href="/settings/appearance" active={pathname==="/settings/appearance"} icon={<Palette className="w-5 h-5"/>} label={t("web.menu.appearance")}/>
-    <NavLink href="/settings/integrations" active={pathname==="/settings/integrations"} icon={<Share2 className="w-5 h-5"/>} label={t("web.menu.integrations")}/>
+    {/* Both of these are administrator-only server-side, so they are hidden
+        the way Access control already was. The pages still explain themselves
+        if someone arrives by URL. */}
+    {user?.is_admin&&<NavLink href="/settings/integrations" active={pathname==="/settings/integrations"} icon={<Share2 className="w-5 h-5"/>} label={t("web.menu.integrations")}/>}
     {user?.is_admin&&<NavLink href="/settings/access" active={pathname==="/settings/access"} icon={<ShieldCheck className="w-5 h-5"/>} label={t("access.view.title")}/>}
   </MenuGroup></>;
 

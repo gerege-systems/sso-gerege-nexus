@@ -3,12 +3,15 @@
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { AdminOnly, useAccess } from "@/lib/permissions";
 import { Share2, Plus, CheckCircle2, ShieldAlert, Activity, Globe, RefreshCw } from "lucide-react";
 
 export default function IntegrationsPage() {
   const { t } = useI18n();
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const { loading: checking, isAdmin } = useAccess();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -23,7 +26,9 @@ export default function IntegrationsPage() {
       const data = await api.getIntegrations();
       setIntegrations(data || []);
     } catch (err) {
-      // ignore
+      // Swallowing this rendered an empty list, which reads as "you have no
+      // integrations" to a member who simply is not allowed to see them.
+      setError(err instanceof Error ? err.message : t("base.message.error"));
     } finally {
       setLoading(false);
     }
@@ -45,8 +50,27 @@ export default function IntegrationsPage() {
     }
   };
 
+  // The endpoints behind this screen are administrator-only, so a member
+  // without those rights is told as much rather than shown an empty list.
+  if (!checking && !isAdmin) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center space-x-2">
+          <Share2 className="w-7 h-7 text-indigo-600" />
+          <span>{t("integrations.view.title")}</span>
+        </h1>
+        <AdminOnly />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {error && (
+        <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center space-x-2">
