@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/gerege"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/gerege"
 )
 
 func TestGeregeMockCitizenQuery(t *testing.T) {

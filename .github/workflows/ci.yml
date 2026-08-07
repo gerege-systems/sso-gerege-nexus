@@ -145,4 +145,4 @@ jobs:
           go build -o bin/api ./cmd/api
           go build -o bin/migrate ./cmd/migrate
       - name: Build backend Docker image
-        run: docker build -f deploy/Dockerfile -t open-gerege-nexus-backend:ci .
+        run: docker build -f deploy/Dockerfile -t gerege-sso-backend:ci .

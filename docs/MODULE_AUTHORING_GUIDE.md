@@ -6,13 +6,13 @@
 
 [Back to the documentation hub](README.md)
 
-Welcome to the **open-gerege-nexus** Module Authoring Guide! This guide explains how external developers can write, register, and distribute custom business application modules for the platform.
+Welcome to the **sso-gerege-nexus** Module Authoring Guide! This guide explains how external developers can write, register, and distribute custom business application modules for the platform.
 
 ---
 
 ## Module architecture overview
 
-In `open-gerege-nexus`, business modules are written in Go as compile-time packages under `backend/internal/apps/`. 
+In `sso-gerege-nexus`, business modules are written in Go as compile-time packages under `backend/internal/apps/`. 
 
 Every module MUST implement the `Module` interface defined in [`backend/internal/module.go`](../backend/internal/module.go):
 
@@ -42,8 +42,8 @@ import (
     "net/http"
     "github.com/go-chi/chi/v5"
     "github.com/jackc/pgx/v5/pgxpool"
-    "github.com/gerege-systems/open-gerege-nexus/backend/internal"
-    "github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appregistry"
+    "github.com/gerege-systems/sso-gerege-nexus/backend/internal"
+    "github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
 )
 
 type Module struct {

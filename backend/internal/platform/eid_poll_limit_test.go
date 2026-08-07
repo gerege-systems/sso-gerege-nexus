@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/security"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/security"
 )
 
 const officeAddr = "203.0.113.7:44001"

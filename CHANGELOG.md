@@ -1,11 +1,12 @@
 # Changelog
 
-All notable changes to **open-gerege-nexus** (Gerege Nexus) will be documented in
+All notable changes to **sso-gerege-nexus** (Gerege SSO) will be documented in
 this file.
 
-Entries below the rebrand keep the names that were true when they shipped — the
+Entries below the rebrands keep the names that were true when they shipped — the
 `open-gerege-mn-erp` repository, the ERP framing, and the `openerp.gerege.mn`
-deployment, which has since moved to `nexus.gerege.mn`. A changelog edited to
+deployment, which moved on to `nexus.gerege.mn`; and the Gerege Nexus naming this
+fork carried before it became Gerege SSO on `sso.gerege.mn`. A changelog edited to
 match the present tense stops being a record.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

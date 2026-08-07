@@ -30,12 +30,15 @@ func TestAppRequestPermission(t *testing.T) {
 }
 
 func TestValidEIDCallback(t *testing.T) {
-	t.Setenv("PUBLIC_ORIGIN", "https://nexus.gerege.mn")
+	// This repository's own origin. The neighbour it shares a host with answers
+	// on nexus.gerege.mn; naming that one here would read as if this stack
+	// deployed there.
+	t.Setenv("PUBLIC_ORIGIN", "https://sso.gerege.mn")
 	t.Setenv("ENVIRONMENT", "production")
-	if got, err := validEIDCallback("https://nexus.gerege.mn/auth/eid/callback"); err != nil || got == "" {
+	if got, err := validEIDCallback("https://sso.gerege.mn/auth/eid/callback"); err != nil || got == "" {
 		t.Fatalf("expected callback to be accepted: %q, %v", got, err)
 	}
-	for _, raw := range []string{"http://nexus.gerege.mn/auth/eid/callback", "https://evil.example/auth/eid/callback", "https://nexus.gerege.mn/login"} {
+	for _, raw := range []string{"http://sso.gerege.mn/auth/eid/callback", "https://evil.example/auth/eid/callback", "https://sso.gerege.mn/login"} {
 		if _, err := validEIDCallback(raw); err == nil {
 			t.Fatalf("expected %q to be rejected", raw)
 		}

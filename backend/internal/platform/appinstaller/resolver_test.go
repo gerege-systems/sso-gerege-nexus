@@ -3,9 +3,9 @@ package appinstaller_test
 import (
 	"testing"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appcatalog"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appinstaller"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appcatalog"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appinstaller"
 )
 
 func TestDependencyGraph_ResolutionAndCycleDetection(t *testing.T) {

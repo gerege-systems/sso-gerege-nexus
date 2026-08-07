@@ -4,7 +4,7 @@
  */
 export const ai = {
   "ai.view.title": { mn: "AI Туслах", en: "AI Copilot" },
-  "ai.view.subtitle": { mn: "Gerege Nexus AI туслах", en: "Gerege Nexus AI Assistant" },
+  "ai.view.subtitle": { mn: "Gerege SSO AI туслах", en: "Gerege SSO AI Assistant" },
   "ai.view.placeholder": { mn: "AI туслахаас асуу...", en: "Ask AI Copilot..." },
   // Shown under the panel title. Was a hard-coded English literal in
   // AICopilot.tsx; it names the model and the guarantee that tools stay inside

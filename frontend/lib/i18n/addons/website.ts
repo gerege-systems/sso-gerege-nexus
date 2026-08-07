@@ -17,8 +17,8 @@ export const website = {
   "website.view.hero_title_highlight": { mn: "таны бүх", en: "every app" },
   "website.view.hero_title_tail": { mn: "апп", en: "you have" },
   "website.view.hero_lede": {
-    mn: "Gerege Nexus нь үндэсний цахим үнэмлэхэд суурилсан нэвтрэлтийг OIDC/SSO чадвартай нэгтгэв. Иргэн нэг удаа баталгаажаад эрхтэй бүх аппдаа найдвартай орно.",
-    en: "Gerege Nexus joins national digital identity to an OIDC/SSO provider. A citizen verifies once and reaches every application they are entitled to.",
+    mn: "Gerege SSO нь үндэсний цахим үнэмлэхэд суурилсан нэвтрэлтийг OIDC/SSO чадвартай нэгтгэв. Иргэн нэг удаа баталгаажаад эрхтэй бүх аппдаа найдвартай орно.",
+    en: "Gerege SSO joins national digital identity to an OIDC/SSO provider. A citizen verifies once and reaches every application they are entitled to.",
   },
 
   "website.stat.eid": { mn: "Баталгаат identity", en: "Verified identity" },
@@ -31,8 +31,8 @@ export const website = {
     en: "Sign-in is not a screen, it is the floor the platform stands on",
   },
   "website.view.features_lede": {
-    mn: "Gerege Platform-ийн батлагдсан урсгалыг Gerege Nexus-ийн tenant, role, audit болон SSO загварт нэгтгэлээ.",
-    en: "The Gerege Platform's proven flow, folded into Gerege Nexus's tenants, roles, audit trail and SSO model.",
+    mn: "Gerege Platform-ийн батлагдсан урсгалыг Gerege SSO-ийн tenant, role, audit болон SSO загварт нэгтгэлээ.",
+    en: "The Gerege Platform's proven flow, folded into Gerege SSO's tenants, roles, audit trail and SSO model.",
   },
 
   "website.feature.instant_title": { mn: "Цахим үнэмлэхээр хормын дотор", en: "Digital ID in seconds" },
@@ -72,7 +72,7 @@ export const website = {
 
   // Key kept as-is: it is internal, and renaming it would touch every caller
   // for no user-visible gain. The value is what reaches the screen.
-  "website.tech.erp_body": { mn: "Модульт аппууд, tenant тусгаарлалт, RBAC", en: "Modular apps, tenant isolation, RBAC" },
+  "website.tech.erp_body": { mn: "Gerege Nexus дээр суурилсан нэгдсэн нэвтрэлт, tenant тусгаарлалт, RBAC", en: "Single sign-on, tenant isolation and RBAC, built on Gerege Nexus" },
   "website.tech.eid_body": { mn: "Push, QR, App2App, баталгаажсан identity", en: "Push, QR, App2App, verified identity" },
   "website.tech.sso_body": { mn: "Холбогдсон аппууд, нэг session", en: "Connected applications, one session" },
 

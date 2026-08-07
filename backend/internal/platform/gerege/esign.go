@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/config"
 )
 
 // EsignCertRequest is the payload for validating a citizen's digital signature

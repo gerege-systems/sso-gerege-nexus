@@ -1,15 +1,22 @@
-# Gerege Nexus
+# Gerege SSO
 
-**Integrated Digital Operations Platform**
+**Single Sign-On and Identity & Access Management Platform**
 
-**Gerege Nexus** is an open-source modular platform that connects services,
-operations, systems, and data across public and private organizations. It is
-**Mongolian-first** and integrates directly with Mongolia's national digital
-infrastructure (DAN, E-ID, XYP / ХУР).
+**Gerege SSO** is an open-source platform, built on
+[Gerege Nexus](https://github.com/gerege-systems/open-gerege-nexus), that
+unifies users, authentication, permissions and system access across public and
+private organizations. It is **Mongolian-first** and integrates directly with
+Mongolia's national digital infrastructure (DAN, E-ID, XYP / ХУР).
+
+A citizen or an employee verifies **once** with their national digital ID and
+then reaches every application they are entitled to without signing in again.
+Third-party systems connect to that session over OAuth2 / OIDC instead of
+keeping password stores of their own.
 
 *Nexus* is the connection point: where organizations, services, workflows,
-systems, users and data meet. The platform itself is not tied to one sector —
-the modules running on it are what make a deployment specific.
+systems, users and data meet. Gerege SSO is that connection's **identity and
+access layer** — it establishes who someone is and decides what they may reach.
+The modules running on it are what make a deployment specific.
 
 Modules compile into a single Go binary, while a PostgreSQL-backed app
 store decides which apps are active per tenant — module separation without the

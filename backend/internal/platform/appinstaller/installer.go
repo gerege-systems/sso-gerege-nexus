@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appcatalog"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appregistry"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appcatalog"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

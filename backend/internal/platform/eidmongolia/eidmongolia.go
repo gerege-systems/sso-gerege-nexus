@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -36,7 +36,7 @@ import (
 
 	signuc "github.com/gerege-systems/open-gerege-core/core/business/usecases/sign"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/config"
 )
 
 // Session states, as the shared usecase reports them. The browser polls for
@@ -108,7 +108,7 @@ func New(db *pgxpool.Pool) (*Service, error) {
 	rp := coreeid.NewClient(
 		os.Getenv("EID_BASE_URL"),
 		os.Getenv("EID_RP_UUID"),
-		firstNonEmpty(os.Getenv("EID_RP_NAME"), "Gerege Nexus"),
+		firstNonEmpty(os.Getenv("EID_RP_NAME"), "Gerege SSO"),
 		os.Getenv("EID_RP_SECRET"),
 		certLevel,
 	)
@@ -116,7 +116,7 @@ func New(db *pgxpool.Pool) (*Service, error) {
 	signer, err := signuc.NewUsecase(&stateStore{db: db}, signuc.Config{
 		V3BaseURL:     strings.TrimSuffix(firstNonEmpty(os.Getenv("EID_SIGN_BASE_URL"), os.Getenv("EID_BASE_URL"), "https://eidmongolia.mn/v3"), "/v3"),
 		RPUUID:        os.Getenv("EID_RP_UUID"),
-		RPName:        firstNonEmpty(os.Getenv("EID_RP_NAME"), "Gerege Nexus"),
+		RPName:        firstNonEmpty(os.Getenv("EID_RP_NAME"), "Gerege SSO"),
 		APISecret:     os.Getenv("EID_RP_SECRET"),
 		SignerCertPEM: pemFromEnv("EID_SIGN_SIGNER_CERT_PEM", "EID_SIGN_SIGNER_CERT_FILE"),
 		SignerKeyPEM:  pemFromEnv("EID_SIGN_SIGNER_KEY_PEM", "EID_SIGN_SIGNER_KEY_FILE"),

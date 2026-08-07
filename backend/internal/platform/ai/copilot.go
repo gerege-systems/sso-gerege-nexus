@@ -125,7 +125,7 @@ func (s *CopilotService) Query(ctx context.Context, req CopilotRequest) (*Copilo
 }
 
 func (s *CopilotService) systemPrompt(ctx context.Context, tenantID, lang string) string {
-	scope := "You are Gerege Nexus AI Copilot. Use approved tools for live data. Never expose data from another tenant."
+	scope := "You are Gerege SSO AI Copilot. Use approved tools for live data. Never expose data from another tenant."
 	instructions := "Be concise, do not invent values, and reply in language code " + lang + "."
 	if s.db != nil {
 		rows, err := s.db.Query(ctx, `SELECT prompt_key, content FROM ai_prompts WHERE active AND (tenant_id IS NULL OR tenant_id=$1) ORDER BY tenant_id NULLS FIRST`, tenantID)
@@ -151,7 +151,7 @@ func toolDeclarations() []gemini.FunctionDeclaration {
 	return []gemini.FunctionDeclaration{
 		{Name: "erp_summary", Description: "Get current tenant product, contact, warehouse and inventory totals."},
 		{Name: "search_products", Description: "Search current tenant products and stock by name or SKU.", Parameters: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}}, "required": []string{"query"}}},
-		{Name: "search_knowledge", Description: "Search approved Gerege Nexus platform knowledge.", Parameters: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}}, "required": []string{"query"}}},
+		{Name: "search_knowledge", Description: "Search approved Gerege SSO platform knowledge.", Parameters: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}}, "required": []string{"query"}}},
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
 )
 
 type Registry struct {

@@ -28,7 +28,7 @@ export default function RootLayout({
           alternative, splitting the root into a server layout plus a client
           providers file, is a larger change than the metadata warrants.
         */}
-        <title>Gerege Nexus</title>
+        <title>Gerege SSO</title>
         <meta
           name="description"
           content="Төрийн болон хувийн хэвшлийн байгууллагын үйлчилгээ, үйл ажиллагаа, систем, өгөгдлийг нэгтгэх модульт платформ."

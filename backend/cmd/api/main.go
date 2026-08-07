@@ -1,5 +1,5 @@
 /*
- * Gerege Nexus
+ * Gerege SSO
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -18,9 +18,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/eid"
-	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/observability"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eid"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/observability"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -65,7 +65,7 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize OpenTelemetry distributed tracing
-	shutdownTracing, err := observability.SetupTracing(ctx, "gerege-nexus", os.Getenv("ENVIRONMENT"))
+	shutdownTracing, err := observability.SetupTracing(ctx, "gerege-sso", os.Getenv("ENVIRONMENT"))
 	if err != nil {
 		slog.Error("failed to setup tracing", "error", err)
 	} else {
@@ -122,7 +122,7 @@ func main() {
 	}
 
 	go func() {
-		slog.Info("starting Gerege Nexus API server", "port", port)
+		slog.Info("starting Gerege SSO API server", "port", port)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server listener error", "error", err)
 			os.Exit(1)
