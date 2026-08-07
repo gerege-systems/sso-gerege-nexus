@@ -8,6 +8,13 @@
 #   IMAGE_BACKEND, IMAGE_FRONTEND, IMAGE_TAG, POSTGRES_PASSWORD,
 #   SSO_DEFAULT_CLIENT_SECRET, PUBLIC_ORIGIN
 
+# Pinned so the project identity stops depending on the deploy directory.
+# Compose otherwise names the project after the directory it runs from, which
+# made /opt/<anything> a load-bearing path: moving it silently produced a second
+# project, and a second project means new containers fighting the old ones for
+# the same host ports. With this set, the directory is just a directory.
+name: sso-gerege-nexus
+
 services:
   postgres:
     image: postgres:16-alpine
