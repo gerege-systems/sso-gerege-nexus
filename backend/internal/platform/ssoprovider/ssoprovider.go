@@ -199,7 +199,11 @@ func (s *SSOProvider) EnsureDefaultClient(ctx context.Context) {
 		ClientType:   clientTypeConfidential,
 		RedirectURIs: []string{s.issuer + "/oauth/callback"},
 		GrantTypes:   SupportedGrantTypes,
-		Scopes:       []string{"openid", "profile", "email", "erp.read", "erp.write"},
+		// offline_access belongs here because the grant list above includes
+		// refresh_token, and offline_access is the only scope that produces a
+		// refresh token — registering one without the other left the client
+		// holding a grant it could never exercise.
+		Scopes: []string{"openid", "profile", "email", "offline_access", "erp.read", "erp.write"},
 	}, hashSecret(secret), "")
 	if err != nil {
 		slog.Error("failed to register the built-in SSO client", "error", err)
