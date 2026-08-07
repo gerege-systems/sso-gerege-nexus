@@ -1,20 +1,31 @@
-# Gerege Template Platform
+# Gerege Nexus
 
-**Gerege Template Platform** 是一个受 Odoo 与云原生生态启发的开源
-**模块化单体 ERP 与业务应用平台**。平台以**蒙古语为默认语言**，并直接对接
-蒙古国国家数字基础设施（DAN、E-ID、XYP / ХУР）。
+**一体化数字运营平台**
 
-各业务模块编译进同一个 Go 二进制文件，由基于 PostgreSQL 的应用商店决定每个租户
+**Gerege Nexus** 是一个开源的模块化平台，用于连接公共与私营机构的服务、业务运营、
+系统与数据。平台以**蒙古语为默认语言**，并直接对接蒙古国国家数字基础设施
+（DAN、E-ID、XYP / ХУР）。
+
+*Nexus* 意为连接点：机构、服务、工作流、系统、用户与数据在此交汇。平台本身不限定
+行业——真正决定一次部署形态的，是运行其上的模块。
+
+各模块编译进同一个 Go 二进制文件，由基于 PostgreSQL 的应用商店决定每个租户
 启用哪些应用——既保留模块边界，又不引入微服务的网络开销与运维复杂度。
 
 <p>
   <a href="../README.md"><img src="assets/icons/flag-mn.png" width="18" height="18" alt=""> Монгол</a>
   &nbsp;·&nbsp;
-  <a href="README_EN.md"><img src="assets/icons/flag-en.png" width="18" height="18" alt=""> English</a>
+  <a href="README_AR.md"><img src="assets/icons/flag-ar.png" width="18" height="18" alt=""> العربية</a>
   &nbsp;·&nbsp;
   <img src="assets/icons/flag-zh.png" width="18" height="18" alt=""> <b>中文</b>
   &nbsp;·&nbsp;
+  <a href="README_EN.md"><img src="assets/icons/flag-en.png" width="18" height="18" alt=""> English</a>
+  &nbsp;·&nbsp;
+  <a href="README_FR.md"><img src="assets/icons/flag-fr.png" width="18" height="18" alt=""> Français</a>
+  &nbsp;·&nbsp;
   <a href="README_RU.md"><img src="assets/icons/flag-ru.png" width="18" height="18" alt=""> Русский</a>
+  &nbsp;·&nbsp;
+  <a href="README_ES.md"><img src="assets/icons/flag-es.png" width="18" height="18" alt=""> Español</a>
 </p>
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](../LICENSE)

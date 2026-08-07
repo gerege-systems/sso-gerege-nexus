@@ -62,6 +62,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
       GOV_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
       OAUTH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
+      DOCUMENTS_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -94,6 +95,17 @@ jobs:
             | tee /tmp/oauth.log
           if grep -q -- '--- SKIP' /tmp/oauth.log; then
             echo "::error::OAuth2 flow tests skipped — OAUTH_TEST_DATABASE_URL is not reaching the test"
+            exit 1
+          fi
+      - name: Fail if the documents integration tests were skipped
+        # Same reasoning: these hold the signing invariants that live in SQL —
+        # the status guard, the one-signature-per-signer constraint, and the
+        # counts the approval chain derives.
+        run: |
+          go test -run 'TestSigningApprovesWhenNoChainIsConfigured' -v ./internal/apps/documents/... \
+            | tee /tmp/documents.log
+          if grep -q -- '--- SKIP' /tmp/documents.log; then
+            echo "::error::documents integration tests skipped — DOCUMENTS_TEST_DATABASE_URL is not reaching the test"
             exit 1
           fi
 
@@ -133,4 +145,4 @@ jobs:
           go build -o bin/api ./cmd/api
           go build -o bin/migrate ./cmd/migrate
       - name: Build backend Docker image
-        run: docker build -f deploy/Dockerfile -t open-gerege-erp-backend:ci .
+        run: docker build -f deploy/Dockerfile -t open-gerege-nexus-backend:ci .

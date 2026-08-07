@@ -1,17 +1,33 @@
 # Баримт бичгийн төв — Documentation Hub
 
-Энэ хавтас нь **Gerege Template Platform**-ын бүх баримт бичиг болон орчуулгыг
-агуулна. Үндсэн хэл нь монгол; орчуулгууд нь файлын нэрийн `_EN`, `_ZH`, `_RU`
-дагаварт хадгалагдана.
+Энэ хавтас нь **Gerege Nexus**-ын бүх баримт бичиг болон орчуулгыг
+агуулна. Үндсэн хэл нь монгол; орчуулгууд нь файлын нэрийн `_AR`, `_ZH`, `_EN`,
+`_FR`, `_RU`, `_ES` дагаварт хадгалагдана.
+
+**Хэлний бодлого: монгол хэл + НҮБ-ын албан ёсны 6 хэл** (араб, хятад, англи,
+франц, орос, испани) — нийт 7 хэл. Монгол хэл эх сурвалж, бусад нь орчуулга.
+Шинэ хэл нэмэхийн өмнө энэ бодлогыг өөрчлөх шаардлагатай: жагсаалт нь дур
+зоргоор биш, олон улсын байгууллагуудын хэрэглэдэг жишигт тулгуурласан.
+
+This directory holds every Gerege Nexus document and translation. Mongolian is
+the source language. **The language policy is Mongolian plus the six official
+languages of the United Nations** (Arabic, Chinese, English, French, Russian,
+Spanish) — seven in total.
 
 <p>
   <a href="../README.md"><img src="assets/icons/flag-mn.png" width="18" height="18" alt=""> Монгол</a>
   &nbsp;·&nbsp;
-  <a href="README_EN.md"><img src="assets/icons/flag-en.png" width="18" height="18" alt=""> English</a>
+  <a href="README_AR.md"><img src="assets/icons/flag-ar.png" width="18" height="18" alt=""> العربية</a>
   &nbsp;·&nbsp;
   <a href="README_ZH.md"><img src="assets/icons/flag-zh.png" width="18" height="18" alt=""> 中文</a>
   &nbsp;·&nbsp;
+  <a href="README_EN.md"><img src="assets/icons/flag-en.png" width="18" height="18" alt=""> English</a>
+  &nbsp;·&nbsp;
+  <a href="README_FR.md"><img src="assets/icons/flag-fr.png" width="18" height="18" alt=""> Français</a>
+  &nbsp;·&nbsp;
   <a href="README_RU.md"><img src="assets/icons/flag-ru.png" width="18" height="18" alt=""> Русский</a>
+  &nbsp;·&nbsp;
+  <a href="README_ES.md"><img src="assets/icons/flag-es.png" width="18" height="18" alt=""> Español</a>
 </p>
 
 ---
@@ -20,10 +36,13 @@
 
 | Хэл | Файл |
 | --- | --- |
-| Монгол | [`../README.md`](../README.md) |
-| English | [`README_EN.md`](README_EN.md) |
+| Монгол (эх сурвалж) | [`../README.md`](../README.md) |
+| العربية | [`README_AR.md`](README_AR.md) |
 | 中文 | [`README_ZH.md`](README_ZH.md) |
+| English | [`README_EN.md`](README_EN.md) |
+| Français | [`README_FR.md`](README_FR.md) |
 | Русский | [`README_RU.md`](README_RU.md) |
+| Español | [`README_ES.md`](README_ES.md) |
 
 ## Техникийн баримт — Technical documentation
 

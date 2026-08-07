@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/dan"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/dan"
 )
 
 func TestDANServiceMockTokenVerification(t *testing.T) {

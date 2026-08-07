@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/tenant"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
 )
 
 func TestTenantContextIsolation(t *testing.T) {

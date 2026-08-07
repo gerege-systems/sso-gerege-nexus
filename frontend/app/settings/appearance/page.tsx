@@ -2,7 +2,7 @@
 
 import { Check, Moon, Monitor, Palette, RotateCcw, Sun } from "lucide-react";
 import { Accent, ColorMode, Density, DesignTheme, useTheme } from "@/lib/theme";
-import { TranslationKey, useI18n } from "@/lib/i18n";
+import { DEFAULT_LOCALES, LOCALES, TranslationKey, useI18n } from "@/lib/i18n";
 
 // Every label resolves through the dictionary, so this screen switches with the
 // rest of the app instead of carrying its own inline translations.
@@ -31,7 +31,7 @@ const densities: { value: Density; label: TranslationKey }[] = [
 ];
 
 export default function AppearanceSettingsPage() {
-  const { t } = useI18n();
+  const { t, availableLocales, setLocaleEnabled } = useI18n();
   const theme = useTheme();
 
   return (
@@ -49,6 +49,43 @@ export default function AppearanceSettingsPage() {
           {t("appearance.action.reset")}
         </button>
       </div>
+
+      <section className="bg-white border border-slate-200 rounded-[var(--gerege-radius-card)] p-5 shadow-sm">
+        <h2 className="font-semibold text-base">{t("appearance.field.languages")}</h2>
+        <p className="text-sm text-slate-500 mt-1">{t("appearance.view.languages_hint")}</p>
+        <p className="text-xs text-slate-400 mt-1 mb-4">{t("appearance.view.languages_partial")}</p>
+        <ul className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+          {LOCALES.map((option) => {
+            const isDefault = DEFAULT_LOCALES.includes(option.code);
+            const isOn = availableLocales.includes(option.code);
+            return (
+              <li key={option.code} className="flex items-center gap-3 px-4 py-3">
+                <img src={option.flag} alt="" width={20} height={20} className="rounded-sm shrink-0" />
+                <span className="text-sm font-medium text-slate-800 min-w-0 truncate">{option.label}</span>
+                <span className="text-[11px] uppercase tracking-wider text-slate-400">{option.code}</span>
+                <span className="ml-auto">
+                  {isDefault ? (
+                    // Not a disabled control: there is nothing to press, so the
+                    // state is stated rather than shown as a dead switch.
+                    <span className="text-xs text-slate-400">{t("appearance.state.language_always")}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isOn}
+                      aria-label={option.label}
+                      onClick={() => setLocaleEnabled(option.code, !isOn)}
+                      className={`relative w-11 h-6 rounded-full transition ${isOn ? "bg-[var(--gerege-blue)]" : "bg-slate-200"}`}
+                    >
+                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${isOn ? "left-[22px]" : "left-0.5"}`} />
+                    </button>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       <section className="bg-white border border-slate-200 rounded-[var(--gerege-radius-card)] p-5 shadow-sm">
         <h2 className="font-semibold text-base">{t("appearance.field.theme_style")}</h2>

@@ -10,8 +10,8 @@ export const auth = {
   "auth.view.title_highlight": { mn: "Нэг удаагийн", en: "Sign in" },
   "auth.view.title_tail": { mn: "нэвтрэлт.", en: "once." },
   "auth.view.lede": {
-    mn: "eID Mongolia апп дээр хүсэлтийг зөвшөөрөхөд ERP болон холбогдсон SSO аппууд таны баталгаажсан session-ийг ашиглана.",
-    en: "Approve the request in the eID Mongolia app and the ERP — along with every connected SSO app — uses that verified session.",
+    mn: "eID Mongolia апп дээр хүсэлтийг зөвшөөрөхөд Gerege Nexus болон холбогдсон SSO аппууд таны баталгаажсан session-ийг ашиглана.",
+    en: "Approve the request in the eID Mongolia app and Gerege Nexus — along with every connected SSO app — uses that verified session.",
   },
   "auth.view.point_push": { mn: "Регистрийн дугаараар push хүсэлт", en: "Push request by registration number" },
   "auth.view.point_qr": { mn: "QR болон mobile App2App", en: "QR and mobile App2App" },
@@ -44,8 +44,8 @@ export const auth = {
   "auth.message.refused": { mn: "Та нэвтрэх хүсэлтийг татгалзлаа.", en: "You declined the sign-in request." },
   "auth.message.success": { mn: "Амжилттай. Систем рүү шилжиж байна…", en: "Signed in. Taking you to the platform…" },
   "auth.message.error_link": {
-    mn: "eID баталгаажуулалтыг ERP хэрэглэгчтэй холбож чадсангүй",
-    en: "The eID verification could not be linked to an ERP user",
+    mn: "eID баталгаажуулалтыг Gerege Nexus хэрэглэгчтэй холбож чадсангүй",
+    en: "The eID verification could not be linked to a Gerege Nexus user",
   },
   "auth.message.error_service": {
     mn: "eID Mongolia үйлчилгээтэй холбогдож чадсангүй",

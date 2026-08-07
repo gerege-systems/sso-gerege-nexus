@@ -3,7 +3,7 @@ package appcatalog_test
 import (
 	"testing"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/appcatalog"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appcatalog"
 )
 
 func TestValidateManifest(t *testing.T) {

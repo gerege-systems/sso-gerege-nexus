@@ -1,5 +1,5 @@
 /*
- * Gerege Template Platform
+ * Gerege Nexus
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -125,6 +125,11 @@ func (m *Manager) DispatchEvent(ctx context.Context, payload EventPayload) error
 				return
 			}
 			req.Header.Set("Content-Type", "application/json")
+			// X-ERP-* are legacy compatibility header names, kept through the
+			// Gerege Nexus rebrand. Subscribers read these exact names and
+			// verify the signature against them; renaming would break every
+			// existing endpoint silently. A Nexus-named alias would need
+			// dual-emission and a deprecation window, not a rename.
 			req.Header.Set("X-ERP-Event", payload.EventType)
 
 			if secret != "" {

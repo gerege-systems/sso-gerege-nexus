@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/resilience"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/resilience"
 )
 
 func TestCircuitBreaker(t *testing.T) {

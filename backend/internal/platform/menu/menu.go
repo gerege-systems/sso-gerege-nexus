@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appregistry"
 )
 
 type InstalledAppStore interface {

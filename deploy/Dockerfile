@@ -1,4 +1,4 @@
-# Production Multi-stage Dockerfile for Gerege Template ERP Platform Backend
+# Production Multi-stage Dockerfile for the Gerege Nexus backend
 # Build context is the repository root: docker build -f deploy/Dockerfile .
 #
 # The Go toolchain version must satisfy backend/go.mod. Official golang images

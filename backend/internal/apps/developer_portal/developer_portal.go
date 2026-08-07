@@ -1,5 +1,5 @@
 /*
- * Gerege Template Platform
+ * Gerege Nexus
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -19,11 +19,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/appregistry"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/auth"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/ssoprovider"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/tenant"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/ssoprovider"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
 )
 

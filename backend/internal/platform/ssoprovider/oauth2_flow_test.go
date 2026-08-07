@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/auth"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/auth"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

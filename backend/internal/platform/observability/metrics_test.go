@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/observability"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/observability"
 )
 
 func TestMetricsMiddleware(t *testing.T) {

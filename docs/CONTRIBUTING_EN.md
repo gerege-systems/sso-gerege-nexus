@@ -1,8 +1,8 @@
 # Contributing
 
-Thank you for your interest in contributing to **Gerege Template Platform**
-(`open-gerege-mn-erp`). Community contributions are what make a modular,
-high-performance open-source ERP platform possible.
+Thank you for your interest in contributing to **Gerege Nexus**
+(`open-gerege-nexus`). Community contributions are what make a modular,
+high-performance open-source platform possible.
 
 <p>
   <a href="../CONTRIBUTING.md"><img src="assets/icons/flag-mn.png" width="18" height="18" alt=""> Монгол</a>

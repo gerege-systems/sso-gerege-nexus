@@ -1,0 +1,143 @@
+name: Prune old container images
+
+# Every deploy pushes one immutable image per component, tagged with the commit
+# SHA, and the server pins that exact tag in its .env. Nothing ever removed
+# them, so the two packages grew by one version per deploy forever.
+#
+# This prunes old *versions*. It never deletes a *package*: the package is the
+# only channel by which built code reaches the server, so deleting one breaks
+# the next `docker compose pull` and a container restart or host rebuild could
+# not bring production back.
+#
+# The version production is currently running is read from the server and
+# excluded by name. "Keep the most recent N" is not sufficient on its own — a
+# rollback through workflow_dispatch can leave an older tag deployed, and that
+# tag would then look prunable while being the only thing standing between the
+# server and an unstartable container.
+on:
+  schedule:
+    # Sunday 03:00 UTC — after the working week, so a prune that goes wrong is
+    # found with the week ahead rather than mid-release.
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: "Versions to keep per package"
+        required: false
+        default: "30"
+      dry_run:
+        description: "Report what would be deleted without deleting it"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  # Shares the deploy's group so a prune can never run while images are being
+  # pushed or pulled.
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: Prune ${{ matrix.component }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Sequential: both read the same server, and a failure to protect one
+      # component should stop the other before it deletes anything.
+      max-parallel: 1
+      matrix:
+        component: [backend, frontend]
+    steps:
+      # The tag the server is actually running. The secrets context is not
+      # allowed in an `if:` — deploy.yml documents that it fails workflow
+      # validation outright — so a missing key surfaces as this step failing,
+      # which is the behaviour wanted anyway: no tag, no prune.
+      - name: Read the deployed image tag
+        id: deployed
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          # No default host, for the reason deploy.yml states at length: this
+          # server also runs the deployment this repository was forked from.
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER || 'deploy' }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            # This fork's own deploy directory. Reading the neighbouring stack's
+            # .env would protect its tag and leave the tag this repository is
+            # actually running unprotected — the one image that must survive.
+            grep -E '^IMAGE_TAG=' /opt/sso-gerege-mn-erp/.env | cut -d= -f2
+
+      - name: Resolve what to protect
+        id: protect
+        env:
+          DEPLOYED: ${{ steps.deployed.outputs.stdout }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # ssh-action puts the whole session on stdout, so take the last line
+          # that looks like a commit SHA — the value the script echoed.
+          tag=$(printf '%s' "$DEPLOYED" | tr -d '\r' | grep -oE '^[0-9a-f]{7,40}$' | tail -n1 || true)
+          if [ -z "$tag" ]; then
+            echo "::error::Could not read the deployed image tag from the server; refusing to prune."
+            exit 1
+          fi
+
+          # Packages are named <repo>/<component>, matching what deploy.yml
+          # pushes. github.event.repository is absent on a schedule trigger, so
+          # the name comes from github.repository instead.
+          echo "package=${REPO#*/}/${{ matrix.component }}" >> "$GITHUB_OUTPUT"
+
+          # Anchored alternation: `latest` is what an unpinned pull resolves to,
+          # and $tag is what the server has pinned.
+          echo "pattern=^(latest|${tag})\$" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Deployed tag: ${tag}"
+
+      # Reported before anything is deleted, so the summary shows what the run
+      # was working from even if the delete step fails.
+      - name: Report current versions
+        # Informational only. The safety of this workflow rests on
+        # ignore-versions and min-versions-to-keep, so a failure to count
+        # versions must not be what stops the prune running.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          pkg=$(printf '%s' "${{ steps.protect.outputs.package }}" | sed 's|/|%2F|')
+          total=$(gh api --paginate \
+            "/orgs/${{ github.repository_owner }}/packages/container/${pkg}/versions" \
+            --jq 'length' 2>/dev/null | awk '{s+=$1} END {print s+0}')
+          {
+            echo "### ${{ matrix.component }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Package | \`${{ steps.protect.outputs.package }}\` |"
+            echo "| Versions now | ${total} |"
+            echo "| Keeping | newest ${{ inputs.keep || '30' }} |"
+            echo "| Protected | \`${{ steps.protect.outputs.pattern }}\` |"
+            echo "| Deployed tag | \`${{ steps.protect.outputs.tag }}\` |"
+            echo "| Dry run | ${{ inputs.dry_run || false }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The action has no dry-run of its own, so the whole step is skipped
+      # instead. inputs is an ordinary context and is allowed in `if:`.
+      - name: Delete old versions
+        if: ${{ github.event_name == 'schedule' || inputs.dry_run == false }}
+        uses: actions/delete-package-versions@v5
+        with:
+          owner: ${{ github.repository_owner }}
+          package-name: ${{ steps.protect.outputs.package }}
+          package-type: container
+          min-versions-to-keep: ${{ inputs.keep || '30' }}
+          ignore-versions: ${{ steps.protect.outputs.pattern }}
+          token: ${{ secrets.GITHUB_TOKEN }}

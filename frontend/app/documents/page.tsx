@@ -1,42 +1,182 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
-import { FileText, Plus, CheckCircle, ShieldCheck, Clock } from "lucide-react";
+import {
+  Banner,
+  DocumentRecord,
+  RowActions,
+  SignatureCell,
+  SignatureDialog,
+  SignatureHistoryButton,
+  SignatureHistoryDialog,
+  SignatureProgress,
+  StatusBadge,
+  useDocumentActions,
+} from "@/components/documents/shared";
+import { FileText, Plus } from "lucide-react";
 
 export default function DocumentsPage() {
   const { t } = useI18n();
-  const [documents, setDocuments] = useState<any[]>([]);
+  const { can } = useAccess();
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ title: "", doc_type: "CONTRACT" });
+  const [signTarget, setSignTarget] = useState<DocumentRecord | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<DocumentRecord | null>(null);
 
-  const loadData = async () => {
+  // A failed load must never be reported as an empty list: "No documents yet" is a
+  // claim about the tenant, and twelve contracts may be sitting in the queue.
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // How many rows this screen has asked for. The list is answered one page at a time —
+  // each row counts its own signatures and outstanding steps — so more rows means
+  // walking OFFSET, not asking for a bigger limit: the server clamps a limit at
+  // ListLimitMax, so raising it stopped at 500 and left the last documents of a large
+  // tenant unreachable from any screen.
+  const PAGE = 200;
+  const [total, setTotal] = useState(0);
+  // Whether a further page may exist. Kept separately from the total, which other
+  // people can change between two of this walk's requests.
+  const [hasMore, setHasMore] = useState(false);
+
+  // What the operator is looking for. Mirrored in a ref because loadSpan is also called
+  // by the actions hook, which captured it at an earlier render: a refresh after signing
+  // must not silently drop the filter the rows on screen were fetched under.
+  const [search, setSearch] = useState("");
+  const [docType, setDocType] = useState("");
+  const [status, setStatus] = useState("");
+  const filterRef = useRef({ q: "", doc_type: "", status: "" });
+  filterRef.current = { q: search, doc_type: docType, status };
+
+  // The filter the rows on screen were actually fetched under, so a blur that changed
+  // nothing does not throw away the pages the operator has loaded, and the empty state
+  // describes the question that was asked rather than the one being typed.
+  const loadedFilter = useRef({ q: "", doc_type: "", status: "" });
+
+  // Only the newest load may write. A load walks several pages, so without this a
+  // filter change part-way through assembled a row set from two different filters, with
+  // a total belonging to neither — and the screen presented it as the whole answer to
+  // the filter shown.
+  const loadTicket = useRef(0);
+
+  // A load asks ONE question, given to it explicitly.
+  //
+  // Refreshes and Load more pass nothing and get the filter the rows on screen were
+  // fetched under; only the controls themselves pass the live one. Reading the live
+  // filter for every load meant a half-typed search changed what the table showed the
+  // next time an action refreshed it — the operator signed a document and the list
+  // became the answer to a question they had not finished asking.
+  const loadSpan = async (rows: number, asked?: { q: string; doc_type: string; status: string }) => {
+    const mine = ++loadTicket.current;
+    const filter = { ...(asked ?? loadedFilter.current) };
     setLoading(true);
     try {
-      const data = await api.getDocuments();
-      setDocuments(data || []);
-    } catch (err) {
-      // ignore
+      const wanted = Math.max(PAGE, rows);
+      const collected: DocumentRecord[] = [];
+      let counted = 0;
+      // Walked by CURSOR, not by offset: offset counts from the start of a set other
+      // people are changing, so a document approved between two of these requests
+      // shifts the rest up and the next request skips one — and a skipped document is
+      // on no screen at all. The cursor names the last row actually seen.
+      //
+      // The end is a page that comes back short, which is a fact about the data rather
+      // than a comparison against a total that may have moved in the meantime.
+      let cursor: { after_at: string; after_id: string } | undefined;
+      let ranOut = false;
+      while (collected.length < wanted) {
+        const page = await api.getDocuments({ ...filter, limit: PAGE, ...cursor });
+        if (loadTicket.current !== mine) return;
+        counted = page?.total ?? 0;
+        const rowsBack = page?.documents || [];
+        collected.push(...rowsBack);
+        if (rowsBack.length < PAGE) {
+          ranOut = true;
+          break;
+        }
+        const last = rowsBack[rowsBack.length - 1];
+        cursor = { after_at: last.created_at, after_id: last.id };
+      }
+      // There is more to read when the walk stopped because it had enough, not because
+      // the data ran out. That is a fact about what came back, so it holds even when the
+      // total has moved; the total only says roughly how much more.
+      setHasMore(!ranOut);
+      setDocuments(collected);
+      setTotal(counted);
+      // What the rows on screen are the answer to. Trimmed, because that is what the
+      // server compared, and kept so the empty state can speak about the filter the
+      // rows were fetched under rather than whatever is in the boxes now.
+      loadedFilter.current = { q: filter.q.trim(), doc_type: filter.doc_type, status: filter.status };
+      setLoadFailed(false);
+    } catch (err: any) {
+      // A load that has been superseded says nothing: the newer one speaks for the
+      // screen, and its own failure would be news about a question nobody is asking.
+      if (loadTicket.current !== mine) return;
+      setLoadFailed(true);
+      // Only when there is nothing on screen to carry the news. With rows showing, the
+      // footer says the list is stale and stays saying it — and a banner here would
+      // overwrite what the action that triggered this refresh had just reported, so a
+      // completed signature read as a failure.
+      if (documents.length === 0) {
+        setMessage({ type: "error", text: err?.message || t("documents.message.load_failed") });
+      }
     } finally {
-      setLoading(false);
+      // The spinner belongs to the load that is still running. A superseded one clearing
+      // it let the screen fall through to "no documents yet" while the newest load was
+      // still in flight — a claim about the tenant, made in the gap. The newest load
+      // always clears it in its own finally, so nothing can be left spinning.
+      if (loadTicket.current === mine) setLoading(false);
     }
   };
 
+  // Refreshes exactly what is on screen, so signing a document 350 rows down does not
+  // throw the operator back to the first page.
+  const loadData = () => loadSpan(documents.length);
+  const loadMore = () => loadSpan(documents.length + PAGE);
+
+  const { isBusy, message, setMessage, succeed, fail, route, reject } = useDocumentActions(loadData);
+
   useEffect(() => {
-    loadData();
+    loadSpan(PAGE, filterRef.current);
   }, []);
+
+  // Nothing between the click and the POST changed any state, so a second click —
+  // or Enter held down — created a second document, each one routed for approval.
+  const [creating, setCreating] = useState(false);
+  // The modal's own overlay covers the page banner, so a refusal reported only there
+  // is a refusal the operator cannot read: the dialog just sat there with the button
+  // re-enabled and no reason given. This is shown inside the modal.
+  const [createFailure, setCreateFailure] = useState<string | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating) return;
+    setCreating(true);
+    // Cleared before the attempt, and replaced after it. A refused create left its
+    // red banner up; when the operator corrected the title and succeeded, that
+    // banner was still the only thing the screen said about the operation — and a
+    // document read as "failed" is submitted again, which lands a duplicate in the
+    // approval queue, since a new document is routed for approval on creation.
+    setMessage(null);
+    setCreateFailure(null);
+    const title = form.title;
     try {
       await api.createDocument(form);
       setShowModal(false);
       setForm({ title: "", doc_type: "CONTRACT" });
-      loadData();
+      await succeed(t("documents.message.create_success", { title }));
+      return;
     } catch (err: any) {
-      alert("Failed to create document: " + err.message);
+      // Both: inside the modal, where it is readable now, and on the page banner for
+      // after the operator gives up and closes it.
+      const text = `${t("documents.message.create_failed")}: ${err.message}`;
+      setCreateFailure(text);
+      setMessage({ type: "error", text });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -48,21 +188,107 @@ export default function DocumentsPage() {
             <FileText className="w-7 h-7 text-indigo-600" />
             <span>{t("documents.view.title")}</span>
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Enterprise document routing, digital signatures, and approval workflows
-          </p>
+          <p className="text-sm text-slate-500 mt-1">{t("documents.view.subtitle")}</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 shadow-sm transition"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{t("documents.action.create")}</span>
-        </button>
+        {can("documents.manage") && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 shadow-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{t("documents.action.create")}</span>
+          </button>
+        )}
       </div>
 
-      {loading ? (
+      {message && <Banner message={message} onDismiss={() => setMessage(null)} />}
+
+      {/* With no rows there is no table footer to carry this, and a refresh that failed
+          after an action is exactly when there are none: the news that the list is stale
+          — and the way to try again — must not live only inside the table. */}
+      {loadFailed && documents.length === 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border border-amber-200 rounded-xl bg-amber-50">
+          <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => loadData()}
+            className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {t("documents.action.retry")}
+          </button>
+        </div>
+      )}
+
+      {/* Paging reads the list; this is how a particular document is found. Each change
+          starts again from the first page, because the rows below have to be the answer
+          to what is in these controls and nothing else. */}
+      <section className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={search}
+          placeholder={t("documents.field.search_placeholder")}
+          maxLength={255}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") loadSpan(PAGE, filterRef.current);
+          }}
+          onBlur={() => {
+            // Only when it actually changed. Reloading on every blur threw away the
+            // pages the operator had loaded — and, because the table came down while
+            // the load ran, the click that caused the blur (Sign, Reject, Load more)
+            // was swallowed with it and the action never happened.
+            if (search.trim() !== loadedFilter.current.q) loadSpan(PAGE, filterRef.current);
+          }}
+          className="flex-1 min-w-[12rem] px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+        />
+        <select
+          value={docType}
+          onChange={(e) => {
+            setDocType(e.target.value);
+            filterRef.current = { ...filterRef.current, doc_type: e.target.value };
+            loadSpan(PAGE, filterRef.current);
+          }}
+          className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">{t("documents.field.any_type")}</option>
+          <option value="CONTRACT">{t("documents.category.legal_contract")}</option>
+          <option value="REQUEST">{t("documents.category.official_request")}</option>
+          <option value="APPROVAL">{t("documents.category.internal_approval")}</option>
+        </select>
+        <select
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            filterRef.current = { ...filterRef.current, status: e.target.value };
+            loadSpan(PAGE, filterRef.current);
+          }}
+          className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">{t("documents.field.any_status")}</option>
+          <option value="DRAFT">{t("documents.state.draft")}</option>
+          <option value="PENDING_APPROVAL">{t("documents.state.pending")}</option>
+          <option value="APPROVED">{t("documents.state.approved")}</option>
+          <option value="REJECTED">{t("documents.state.rejected")}</option>
+        </select>
+      </section>
+
+      {loading && documents.length === 0 ? (
         <div className="py-12 text-center text-slate-400">{t("documents.message.loading")}</div>
+      ) : documents.length === 0 ? (
+        // Only a load that succeeded may claim the tenant has no documents; a
+        // failed one says so in the banner and shows whatever it already had.
+        loadFailed ? null : (
+          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-sm">
+            {/* With a filter on, an empty answer says nothing about the tenant — and the
+                filter that matters is the one these rows were fetched under. Reading the
+                live boxes instead let clearing the search box turn "nothing matches"
+                into "no documents yet", about a tenant holding hundreds. */}
+            {loadedFilter.current.q || loadedFilter.current.doc_type || loadedFilter.current.status
+              ? t("documents.message.no_matches")
+              : t("documents.message.empty")}
+          </div>
+        )
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <table className="w-full text-left text-xs text-slate-600">
@@ -73,6 +299,7 @@ export default function DocumentsPage() {
                 <th className="px-4 py-3">{t("base.field.status")}</th>
                 <th className="px-4 py-3">{t("documents.field.signature")}</th>
                 <th className="px-4 py-3">{t("documents.field.created")}</th>
+                <th className="px-4 py-3 text-right">{t("base.field.actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -81,36 +308,68 @@ export default function DocumentsPage() {
                   <td className="px-4 py-3 font-semibold text-slate-900">{doc.title}</td>
                   <td className="px-4 py-3 font-mono text-slate-600">{doc.doc_type}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center space-x-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                        doc.status === "APPROVED"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border border-amber-200"
-                      }`}
-                    >
-                      {doc.status === "APPROVED" ? (
-                        <CheckCircle className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <Clock className="w-3 h-3 text-amber-500" />
-                      )}
-                      <span>{doc.status}</span>
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusBadge status={doc.status} />
+                      <SignatureProgress doc={doc} />
+                    </div>
                   </td>
                   <td className="px-4 py-3">
-                    {doc.signed_by ? (
-                      <span className="bg-blue-50 text-blue-700 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border border-blue-200 flex items-center w-max space-x-1">
-                        <ShieldCheck className="w-3 h-3 text-blue-500" />
-                        <span>{doc.signed_by}</span>
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 italic">{t("documents.state.pending_signature")}</span>
-                    )}
+                    <div className="flex items-start gap-2">
+                      <SignatureCell doc={doc} />
+                      <SignatureHistoryButton doc={doc} onOpen={setHistoryTarget} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-slate-400">{new Date(doc.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-right">
+                    <RowActions
+                      doc={doc}
+                      busy={isBusy(doc.id)}
+                      canSign={can("documents.sign")}
+                      canManage={can("documents.manage")}
+                      onSign={setSignTarget}
+                      onReject={reject}
+                      onRoute={route}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {/* A stale list says so for as long as it is stale — the banner can be
+              dismissed, and a refresh that failed after an action must not be the only
+              thing that says the rows are old. */}
+          {loadFailed && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-amber-200 bg-amber-50">
+              <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => loadData()}
+                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {t("documents.action.retry")}
+              </button>
+            </div>
+          )}
+
+
+          {/* A partial list says so. Silence here is what makes an operator search for
+              a contract that is simply on the next page. */}
+          {hasMore && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50">
+              <p className="text-[11px] text-slate-500">
+                {t("documents.message.showing_some", { shown: documents.length, total })}
+              </p>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={loadMore}
+                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              >
+                {t("documents.action.load_more")}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -119,15 +378,28 @@ export default function DocumentsPage() {
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200">
             <h2 className="text-xl font-bold text-slate-900 mb-4">{t("documents.view.create_title")}</h2>
+
+            {createFailure && (
+              <p className="mb-4 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+                {createFailure}
+              </p>
+            )}
+
             <form onSubmit={handleCreate} className="space-y-4">
+              {/* maxLength is what document_records.title holds, in the characters
+                  Postgres counts. The server refuses more, so there is no reason to
+                  let it be typed and then refused. */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Document Title *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {t("documents.field.title")} *
+                </label>
                 <input
                   type="text"
                   placeholder={t("documents.field.title_placeholder")}
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  maxLength={255}
                   required
                 />
               </div>
@@ -148,19 +420,40 @@ export default function DocumentsPage() {
               <div className="flex items-center space-x-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setCreateFailure(null);
+                  }}
                   className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
                 >
-                  Cancel
+                  {t("base.action.cancel")}
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs"
+                  disabled={creating || !form.title.trim()}
+                  className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs disabled:opacity-50"
                 >{t("documents.action.create")}</button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {signTarget && (
+        <SignatureDialog
+          key={signTarget.id}
+          doc={signTarget}
+          onClose={() => setSignTarget(null)}
+          onDone={async (text) => {
+            setSignTarget(null);
+            await succeed(text);
+          }}
+          onError={fail}
+        />
+      )}
+
+      {historyTarget && (
+        <SignatureHistoryDialog doc={historyTarget} onClose={() => setHistoryTarget(null)} />
       )}
     </div>
   );

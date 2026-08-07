@@ -2,6 +2,19 @@
 
 -- Durable storage for the OAuth2 / OpenID Connect provider.
 --
+-- Numbered 00022, not 00010. This fork wrote it as 00010 while upstream was
+-- writing 00010_esign_v2, and goose refuses to run at all with two files
+-- claiming one version — it is a hard error, not a warning. Upstream's number
+-- is the one that cannot move: renumbering a migration that other databases
+-- have already applied would make it run a second time everywhere.
+--
+-- Consequence for any database that applied this file as 00010: it has row 10
+-- recorded, so goose would treat upstream's esign_v2 as already applied and
+-- skip it forever. Delete that row before the next migrate run —
+--   DELETE FROM goose_db_version WHERE version_id = 10;
+-- — and 00010 through 00022 then apply in order. Re-running this file costs
+-- nothing: every statement below is written to be idempotent.
+--
 -- Everything below used to live in Go maps on the SSOProvider struct. Since
 -- the rollout replaces the container on every push, an integrator who
 -- registered a client in the developer portal lost it — client_id, secret and

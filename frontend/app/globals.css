@@ -135,11 +135,60 @@ html[data-density="compact"] main { padding-top: 1rem; padding-bottom: 1rem; }
 
 /* Original Theme preserves the repository's original Odoo-inspired shell. */
 html[data-design="original"] .gerege-topbar { background: #0f172a; border-color: #1e293b; color: white; }
+
+/* The bar is dark here, so its slate utilities are inverted to read against it. */
 html[data-design="original"] .gerege-topbar .text-slate-900,
 html[data-design="original"] .gerege-topbar .text-slate-800 { color: #f8fafc !important; }
 html[data-design="original"] .gerege-topbar .text-slate-500,
 html[data-design="original"] .gerege-topbar .text-slate-600 { color: #94a3b8 !important; }
 html[data-design="original"] .gerege-topbar .border-slate-200 { border-color: #334155 !important; }
+
+/* Light surfaces anchored inside that dark bar: the user menu, the search
+   results, and the account button itself once it opens and fills with
+   --gerege-blue-soft. The inversion above would paint their text near-white on
+   near-white, so undo it for them and reset the `color: white` the bar hands
+   down to anything without a colour utility.
+
+   Plain descendant selectors on purpose — one class deeper, so they win on
+   specificity. An earlier attempt scoped the inversion with
+   :not(.x, .x *) instead, whose complex-selector form browsers without
+   Selectors-4 support reject, dropping the whole inversion and taking the
+   bar's own text with it. */
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight { color: var(--gerege-fg); }
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight.text-slate-900,
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight.text-slate-800,
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight .text-slate-900,
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight .text-slate-800 {
+  color: var(--gerege-fg) !important;
+}
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight.text-slate-500,
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight.text-slate-600,
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight .text-slate-500,
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight .text-slate-600 {
+  color: var(--gerege-muted) !important;
+}
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight.border-slate-200,
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight .border-slate-200 {
+  border-color: var(--gerege-border) !important;
+}
+
+/* Controls sitting directly on the bar carry Tailwind's near-white slate fills
+   — the hover state of the account button and the menu toggle, and the search
+   field's resting background. The inversion above then writes near-white text
+   onto them, which is how the account name disappeared on hover exactly as it
+   had with the menu open. Translucent light overlays keep the bar dark and the
+   inverted text legible. */
+html[data-design="original"] .gerege-topbar .hover\:bg-slate-50:hover,
+html[data-design="original"] .gerege-topbar .bg-slate-100\/80 {
+  background-color: rgb(255 255 255 / 10%) !important;
+}
+html[data-design="original"] .gerege-topbar input::placeholder { color: rgb(255 255 255 / 55%); }
+
+/* Inside the light surfaces a light hover fill is the correct one, so put it
+   back — one class deeper, and via the token so it follows the theme. */
+html[data-design="original"] .gerege-topbar .gerege-topbar-onlight .hover\:bg-slate-50:hover {
+  background-color: var(--gerege-surface-2) !important;
+}
 html[data-design="original"] .original-brand-mark { color: #818cf8; background: #1e293b; }
 html[data-design="original"] .gerege-nav-link-active {
   color: var(--gerege-blue);
@@ -159,6 +208,10 @@ html[data-theme="light"] .gerege-shell .bg-slate-100 { background-color: var(--g
 html[data-theme="dark"] .bg-white { background-color: var(--gerege-surface) !important; }
 html[data-theme="dark"] .bg-slate-50,
 html[data-theme="dark"] .bg-slate-100 { background-color: var(--gerege-surface-2) !important; }
+/* The hover variants are separate classes and were missed by the rule above,
+   so hovering a menu row in dark mode flashed it near-white under light text. */
+html[data-theme="dark"] .hover\:bg-slate-50:hover,
+html[data-theme="dark"] .hover\:bg-slate-100:hover { background-color: var(--gerege-surface-2) !important; }
 html[data-theme="dark"] .text-slate-900,
 html[data-theme="dark"] .text-slate-800,
 html[data-theme="dark"] .text-slate-700 { color: var(--gerege-fg) !important; }

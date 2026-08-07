@@ -1,29 +1,49 @@
-# Gerege Template Platform
+# Gerege Nexus
 
-**Gerege Template Platform** нь Odoo болон cloud-native экосистемээс санаа авсан,
-өндөр бүтээмжтэй, Монгол Улсын цахим дэд бүтэц (ДАН, E-ID, ХУР / XYP)-тэй шууд
-холбогдох боломжтой, **монгол хэлийг үндсэн хэл болгосон** нээлттэй эхийн
-**Modular Monolith ERP & бизнес аппликейшн платформ** юм.
+**Үйлчилгээ, үйл ажиллагаа, системийн нэгдсэн платформ**
 
-Нэг Go бинари дотор бизнесийн модулиуд компиллогдож, тенант бүрт аль апп
+**Gerege Nexus** нь төрийн болон хувийн хэвшлийн байгууллагын үйлчилгээ, үйл
+ажиллагаа, систем, өгөгдлийг нэгтгэх модульт платформ юм. Cloud-native
+экосистемээс санаа авсан, өндөр бүтээмжтэй, Монгол Улсын цахим дэд бүтэц (ДАН,
+E-ID, ХУР / XYP)-тэй шууд холбогдох боломжтой, **монгол хэлийг үндсэн хэл
+болгосон** нээлттэй эхийн шийдэл.
+
+*Nexus* гэдэг нь холбох цэг — байгууллага, үйлчилгээ, ажлын урсгал, систем,
+хэрэглэгч, өгөгдөл нэг дор уулзах цэгийг хэлнэ. Платформ өөрөө нэг салбарт
+зориулагдаагүй: дээр нь ажиллах модулиуд л тухайн байгууллагын хэрэгцээг
+тодорхойлно.
+
+Нэг Go бинари дотор модулиуд компиллогдож, тенант бүрт аль апп
 идэвхтэйг PostgreSQL дээрх апп стор шийднэ — сүлжээний нэмэлт дуудлагагүй,
 микросервисийн нарийн төвөгтэй байдалгүйгээр модуль хуваарилалт хийнэ.
+
+**Хэлний бодлого: монгол хэл + НҮБ-ын албан ёсны 6 хэл** — араб, хятад, англи,
+франц, орос, испани. Нийт 7 хэл. Монгол хэл эх сурвалж; баримт бичиг долуулаа
+байдаг бол програм хангамж нь монгол, англи хоёроор ирж, үлдсэнийг нь
+**Тохиргоо → Харагдац** дотроос асаана. Дэлгэрэнгүйг
+[орчуулгын гарын авлага](docs/TRANSLATION_GUIDE.md)-аас үзнэ үү.
 
 <p>
   <img src="docs/assets/icons/flag-mn.png" width="18" height="18" alt=""> <b>Монгол</b>
   &nbsp;·&nbsp;
-  <a href="docs/README_EN.md"><img src="docs/assets/icons/flag-en.png" width="18" height="18" alt=""> English</a>
+  <a href="docs/README_AR.md"><img src="docs/assets/icons/flag-ar.png" width="18" height="18" alt=""> العربية</a>
   &nbsp;·&nbsp;
   <a href="docs/README_ZH.md"><img src="docs/assets/icons/flag-zh.png" width="18" height="18" alt=""> 中文</a>
   &nbsp;·&nbsp;
+  <a href="docs/README_EN.md"><img src="docs/assets/icons/flag-en.png" width="18" height="18" alt=""> English</a>
+  &nbsp;·&nbsp;
+  <a href="docs/README_FR.md"><img src="docs/assets/icons/flag-fr.png" width="18" height="18" alt=""> Français</a>
+  &nbsp;·&nbsp;
   <a href="docs/README_RU.md"><img src="docs/assets/icons/flag-ru.png" width="18" height="18" alt=""> Русский</a>
+  &nbsp;·&nbsp;
+  <a href="docs/README_ES.md"><img src="docs/assets/icons/flag-es.png" width="18" height="18" alt=""> Español</a>
 </p>
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8.svg)](https://go.dev)
 [![Next.js](https://img.shields.io/badge/Next.js-15.1-black.svg)](https://nextjs.org)
-[![CI](https://github.com/gerege-systems/open-gerege-mn-erp/actions/workflows/ci.yml/badge.svg)](https://github.com/gerege-systems/open-gerege-mn-erp/actions/workflows/ci.yml)
-[![Security](https://github.com/gerege-systems/open-gerege-mn-erp/actions/workflows/security.yml/badge.svg)](https://github.com/gerege-systems/open-gerege-mn-erp/actions/workflows/security.yml)
+[![CI](https://github.com/gerege-systems/open-gerege-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/gerege-systems/open-gerege-nexus/actions/workflows/ci.yml)
+[![Security](https://github.com/gerege-systems/open-gerege-nexus/actions/workflows/security.yml/badge.svg)](https://github.com/gerege-systems/open-gerege-nexus/actions/workflows/security.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
@@ -111,7 +131,7 @@
 | 4 | Public Billing & e-Barimt | `io.example.billing` | `/billing` | Нэхэмжлэх, 10% НӨАТ, e-Barimt баримт |
 | 5 | Digital Documents & E-Sign | `io.example.documents` | `/documents` | Цахим баримт, гарын үсэг, батламжийн урсгал |
 | 6 | Developer Portal & OAuth2 SSO | `io.example.developer_portal` | `/developer/apps` | OAuth2 client апп бүртгэл |
-| 7 | PDF цахим гарын үсэг | `io.example.esign` | `/esign` | PDF баримтыг Gerege eSign HSM-ээр тоон гарын үсгээр баталгаажуулах |
+| 7 | PDF цахим гарын үсэг | `io.example.esign` | `/esign` | eID Mongolia (PIN2) хуулийн хүчин төгөлдөр цахим гарын үсэг, Gerege eSign HSM, багц баталгаажуулалт, гарын үсгийн лог |
 
 Апп бүр тенантад суулгагдаж идэвхжсэн үед л маршрутууд нээгдэнэ. Суулгаагүй апп
 руу хандвал `403 Forbidden` буцна.
@@ -209,8 +229,13 @@ npm run dev
 | `DEPLOY_SSH_KEY` | Тийм | Deploy хэрэглэгчийн хувийн түлхүүр. Байхгүй бол rollout алгасана |
 | `POSTGRES_PASSWORD` | Тийм | Сервер дэх өгөгдлийн сангийн нууц үг |
 | `SSO_DEFAULT_CLIENT_SECRET` | Тийм | Production дээр OAuth2 client-д зайлшгүй |
-| `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` | Үгүй | Анхдагч: `openerp.gerege.mn` / `deploy` / `22` |
-| `PUBLIC_ORIGIN` | Үгүй | Анхдагч: `https://openerp.gerege.mn` |
+| `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` | Үгүй | Анхдагч: `nexus.gerege.mn` / `deploy` / `22` |
+| `PUBLIC_ORIGIN` | Үгүй | Анхдагч: `https://nexus.gerege.mn` |
+
+> Production домэйн нь `nexus.gerege.mn`. Өмнөх `openerp.gerege.mn` домэйныг
+> Gerege Nexus нэршилд шилжихэд орлуулсан. `PUBLIC_ORIGIN` нь CORS, OIDC issuer,
+> eID callback гурвыг нэг дор тодорхойлдог тул түүнийг өөрчлөхөд DNS, TLS
+> гэрчилгээ, issuer-т тулгуурласан client бүр хамт шилжинэ.
 
 Серверт зөвхөн Docker шаардлагатай — эх код ч, Go/Node ч хэрэггүй. Утгуудын
 жишээг [`deploy/.env.prod.example`](deploy/.env.prod.example)-ээс үзнэ үү.

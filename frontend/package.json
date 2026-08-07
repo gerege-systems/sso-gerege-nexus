@@ -1,12 +1,13 @@
 {
-  "name": "open-gerege-mn-erp-frontend",
+  "name": "open-gerege-nexus-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "i18n:translate": "node scripts/i18n-translate.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",

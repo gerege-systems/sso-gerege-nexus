@@ -1,5 +1,5 @@
 /*
- * Gerege Template Platform
+ * Gerege Nexus
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/config"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
 )
 
 type DANProfile struct {
@@ -54,6 +54,16 @@ func NewDANService() *DANService {
 	}
 }
 
+// ErrUnavailable reports that dan.gerege.mn could not be used at all — no credentials,
+// no live implementation, no network — as opposed to the gateway having refused a
+// citizen.
+//
+// The two are opposite answers. A refusal is the caller's to fix and should not be
+// retried; an unavailable gateway is nobody's fault at this end and should be. Callers
+// that turn errors into HTTP statuses need to tell them apart, and a string is not a
+// thing to make that decision on.
+var ErrUnavailable = errors.New("dan.gerege.mn is not available")
+
 // VerifyDANToken verifies an active SSO session token issued by dan.gerege.mn
 func (s *DANService) VerifyDANToken(ctx context.Context, danToken string) (*DANProfile, error) {
 	if danToken == "" {
@@ -82,7 +92,7 @@ func (s *DANService) VerifyDANToken(ctx context.Context, danToken string) (*DANP
 		}, nil
 	}
 
-	return nil, fmt.Errorf("dan.gerege.mn live gateway requires valid DAN_API_KEY credentials")
+	return nil, fmt.Errorf("%w: the live gateway requires valid DAN_API_KEY credentials", ErrUnavailable)
 }
 
 // AuthenticateDANCitizen authenticates Mongolian citizen via dan.gerege.mn OTP/PKI gateway
@@ -107,5 +117,5 @@ func (s *DANService) AuthenticateDANCitizen(ctx context.Context, regNumber, otpC
 		}, nil
 	}
 
-	return nil, fmt.Errorf("dan.gerege.mn live OTP authentication requires active network access")
+	return nil, fmt.Errorf("%w: live OTP authentication is not implemented in this build", ErrUnavailable)
 }

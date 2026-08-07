@@ -14,11 +14,11 @@ export const website = {
   // The hero headline is one sentence with a highlighted middle, so it is
   // stored in three parts rather than as markup inside a translation.
   "website.view.hero_title_lead": { mn: "Нэг нэвтрэлт —", en: "One sign-in —" },
-  "website.view.hero_title_highlight": { mn: "таны бүх", en: "every business app" },
-  "website.view.hero_title_tail": { mn: "бизнес апп", en: "you have" },
+  "website.view.hero_title_highlight": { mn: "таны бүх", en: "every app" },
+  "website.view.hero_title_tail": { mn: "апп", en: "you have" },
   "website.view.hero_lede": {
-    mn: "Gerege ERP нь үндэсний цахим үнэмлэхэд суурилсан нэвтрэлтийг OIDC/SSO чадвартай нэгтгэв. Иргэн нэг удаа баталгаажаад эрхтэй бүх аппдаа найдвартай орно.",
-    en: "Gerege ERP joins national digital identity to an OIDC/SSO provider. A citizen verifies once and reaches every application they are entitled to.",
+    mn: "Gerege Nexus нь үндэсний цахим үнэмлэхэд суурилсан нэвтрэлтийг OIDC/SSO чадвартай нэгтгэв. Иргэн нэг удаа баталгаажаад эрхтэй бүх аппдаа найдвартай орно.",
+    en: "Gerege Nexus joins national digital identity to an OIDC/SSO provider. A citizen verifies once and reaches every application they are entitled to.",
   },
 
   "website.stat.eid": { mn: "Баталгаат identity", en: "Verified identity" },
@@ -31,8 +31,8 @@ export const website = {
     en: "Sign-in is not a screen, it is the floor the platform stands on",
   },
   "website.view.features_lede": {
-    mn: "Gerege Platform-ийн батлагдсан урсгалыг ERP-ийн tenant, role, audit болон SSO загварт нэгтгэлээ.",
-    en: "The Gerege Platform's proven flow, folded into the ERP's tenants, roles, audit trail and SSO model.",
+    mn: "Gerege Platform-ийн батлагдсан урсгалыг Gerege Nexus-ийн tenant, role, audit болон SSO загварт нэгтгэлээ.",
+    en: "The Gerege Platform's proven flow, folded into Gerege Nexus's tenants, roles, audit trail and SSO model.",
   },
 
   "website.feature.instant_title": { mn: "Цахим үнэмлэхээр хормын дотор", en: "Digital ID in seconds" },
@@ -42,8 +42,8 @@ export const website = {
   },
   "website.feature.sso_title": { mn: "Нэг нэвтрэлт — олон систем", en: "One sign-in, many systems" },
   "website.feature.sso_body": {
-    mn: "ERP-ийн баталгаажсан session нь OAuth2/OIDC provider-тэй нэг trust boundary ашиглана. Холбогдсон апп бүр дахин нэвтрүүлэх шаардлагагүй.",
-    en: "The ERP session and the OAuth2/OIDC provider share one trust boundary, so no connected app asks again.",
+    mn: "Платформын баталгаажсан session нь OAuth2/OIDC provider-тэй нэг trust boundary ашиглана. Холбогдсон апп бүр дахин нэвтрүүлэх шаардлагагүй.",
+    en: "The platform session and the OAuth2/OIDC provider share one trust boundary, so no connected app asks again.",
   },
   "website.feature.passwordless_title": { mn: "Нууц үггүй, сервер талын хамгаалалт", en: "Passwordless, guarded server-side" },
   "website.feature.passwordless_body": {
@@ -70,7 +70,9 @@ export const website = {
   "website.trust.allowlist": { mn: "RP callback origin allowlist", en: "RP callback origin allowlist" },
   "website.trust.audit": { mn: "Login ба access audit event", en: "Login and access audit events" },
 
-  "website.tech.erp_body": { mn: "Business apps, tenant isolation, RBAC", en: "Business apps, tenant isolation, RBAC" },
+  // Key kept as-is: it is internal, and renaming it would touch every caller
+  // for no user-visible gain. The value is what reaches the screen.
+  "website.tech.erp_body": { mn: "Модульт аппууд, tenant тусгаарлалт, RBAC", en: "Modular apps, tenant isolation, RBAC" },
   "website.tech.eid_body": { mn: "Push, QR, App2App, баталгаажсан identity", en: "Push, QR, App2App, verified identity" },
   "website.tech.sso_body": { mn: "Холбогдсон аппууд, нэг session", en: "Connected applications, one session" },
 

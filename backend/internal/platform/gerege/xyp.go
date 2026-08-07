@@ -1,5 +1,5 @@
 /*
- * Gerege Template Platform
+ * Gerege Nexus
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -16,7 +16,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/config"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
 )
 
 type CitizenInfo struct {

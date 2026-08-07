@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Create a report to help us improve open-gerege-mn-erp
+about: Create a report to help us improve open-gerege-nexus
 title: '[BUG] '
 labels: 'bug'
 assignees: ''

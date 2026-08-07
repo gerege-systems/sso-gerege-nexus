@@ -1,5 +1,5 @@
 /*
- * Gerege Template Platform
+ * Gerege Nexus
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -18,9 +18,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/eid"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/observability"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/eid"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/observability"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -30,6 +30,10 @@ import (
 // handler was still waiting, closed the connection without a response, and
 // nginx turned that into a 502 for every check the citizen did not answer
 // within 15 seconds — which read as a slow, flaky sign-in.
+//
+// It is not only sign-in any more: /documents/{id}/sign/eid/poll waits on the same
+// relying-party call for the same window, so a signature ceremony would have been
+// cut off in the same way and lost the approval a citizen had just given.
 var writeTimeout = eid.PollWindow + 15*time.Second
 
 // Slowloris is held off by the header deadline rather than by writeTimeout, so
@@ -61,7 +65,7 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize OpenTelemetry distributed tracing
-	shutdownTracing, err := observability.SetupTracing(ctx, "platform-erp", os.Getenv("ENVIRONMENT"))
+	shutdownTracing, err := observability.SetupTracing(ctx, "gerege-nexus", os.Getenv("ENVIRONMENT"))
 	if err != nil {
 		slog.Error("failed to setup tracing", "error", err)
 	} else {
@@ -102,6 +106,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Background jobs run until this context is cancelled during shutdown, so
+	// a sweep in flight is not left holding a database connection.
+	jobsCtx, stopJobs := context.WithCancel(context.Background())
+	defer stopJobs()
+	srv.StartBackgroundJobs(jobsCtx)
+
 	httpSrv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           srv.Router(),
@@ -112,7 +122,7 @@ func main() {
 	}
 
 	go func() {
-		slog.Info("starting Gerege Template Platform API server", "port", port)
+		slog.Info("starting Gerege Nexus API server", "port", port)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server listener error", "error", err)
 			os.Exit(1)
@@ -125,6 +135,7 @@ func main() {
 	<-stop
 
 	slog.Info("shutting down HTTP API server gracefully...")
+	stopJobs()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

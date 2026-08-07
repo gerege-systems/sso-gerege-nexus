@@ -50,12 +50,12 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/platform_db?sslmode=disable
       PORT: 8080
       ENVIRONMENT: production
-      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://openerp.gerege.mn}
-      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-https://openerp.gerege.mn}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://sso.gerege.mn}
+      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-https://sso.gerege.mn}
       # Nginx terminates TLS in front of the API, so the forwarded client
       # address can be trusted here.
       TRUST_PROXY_HEADERS: "true"
-      SSO_ISSUER: ${PUBLIC_ORIGIN:-https://openerp.gerege.mn}
+      SSO_ISSUER: ${PUBLIC_ORIGIN:-https://sso.gerege.mn}
       SSO_DEFAULT_CLIENT_SECRET: ${SSO_DEFAULT_CLIENT_SECRET:?SSO_DEFAULT_CLIENT_SECRET is required in production}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
@@ -72,10 +72,36 @@ services:
       EID_BASE_URL: ${EID_BASE_URL:-https://eidmongolia.mn/v3}
       EID_RP_UUID: ${EID_RP_UUID:-}
       EID_RP_SECRET: ${EID_RP_SECRET:-}
-      EID_RP_NAME: ${EID_RP_NAME:-Gerege ERP}
+      EID_RP_NAME: ${EID_RP_NAME:-Gerege Nexus}
       EID_CERT_LEVEL: ${EID_CERT_LEVEL:-ADVANCED}
-      EID_DISPLAY_TEXT: ${EID_DISPLAY_TEXT:-Gerege ERP-д нэвтрэх}
+      EID_DISPLAY_TEXT: ${EID_DISPLAY_TEXT:-Gerege Nexus-д нэвтрэх}
       EID_JIT_TENANT_SLUG: ${EID_JIT_TENANT_SLUG:-}
+      # eID Mongolia qualified PDF signing. It reuses the RP credentials above —
+      # one registration carries both the authentication and the SIGNATURE
+      # permission — so only the signing-specific overrides appear here.
+      # EID_SIGN_CERT_LEVEL is deliberately QUALIFIED rather than the ADVANCED
+      # used for sign-in: an advanced signature is not what тоон гарын үсэг means
+      # in law, and accepting one would downgrade every document produced.
+      EID_SIGN_MOCK_MODE: ${EID_SIGN_MOCK_MODE:-false}
+      EID_SIGN_BASE_URL: ${EID_SIGN_BASE_URL:-}
+      EID_SIGN_CERT_LEVEL: ${EID_SIGN_CERT_LEVEL:-QUALIFIED}
+      EID_SIGN_DISPLAY_TEXT: ${EID_SIGN_DISPLAY_TEXT:-}
+      # Server Document-Signer, used only when eID's own stamp endpoint is
+      # unavailable — it is what turns a stamp outage into a self-embedded
+      # PAdES rather than no signed PDF at all. Signing works without it; the
+      # fallback does not. The certificate must be the SAME across restarts and
+      # replicas, so it is supplied rather than generated.
+      EID_SIGN_SIGNER_CERT_PEM: ${EID_SIGN_SIGNER_CERT_PEM:-}
+      EID_SIGN_SIGNER_KEY_PEM: ${EID_SIGN_SIGNER_KEY_PEM:-}
+      # Gerege eSign HSM, the older signing rail. These were absent entirely,
+      # which left the service in mock mode on a production instance: mock
+      # SignPDF returns the submitted PDF unchanged, so documents were marked
+      # SIGNED while carrying no signature at all. Set ESIGN_TOKEN to use it, or
+      # turn the rail off from the signing policy screen.
+      ESIGN_MOCK_MODE: ${ESIGN_MOCK_MODE:-false}
+      ESIGN_LOGIN_URL: ${ESIGN_LOGIN_URL:-https://hsm.gerege.mn/esign/login}
+      ESIGN_SIGN_URL: ${ESIGN_SIGN_URL:-https://hsm.gerege.mn/signer/signpdf}
+      ESIGN_TOKEN: ${ESIGN_TOKEN:-}
       DAN_MOCK_MODE: ${DEMO_MODE:-false}
       XYP_MOCK_MODE: ${DEMO_MODE:-false}
     ports:

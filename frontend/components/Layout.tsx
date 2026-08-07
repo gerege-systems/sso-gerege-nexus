@@ -9,15 +9,41 @@ import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import UserMenu from "@/components/UserMenu";
 import AICopilot from "@/components/AICopilot";
-import { Landmark, LayoutGrid, Settings, Users, Package, Boxes, Share2, CreditCard, FileText, Code2, Menu as MenuIcon, Palette, Building2, BrainCircuit, Search, Ellipsis, ShieldCheck, PenTool } from "lucide-react";
+import { Landmark, LayoutGrid, Settings, Users, Package, Boxes, Share2, CreditCard, FileText, Code2, Menu as MenuIcon, Palette, Building2, BrainCircuit, Search, Ellipsis, ShieldCheck, PenTool, ScrollText, Layers, Move, ServerCog, Activity, Copy, Upload, Tags, BadgeDollarSign, Ruler, Sliders, Percent, ArrowRightLeft, RefreshCw, Warehouse, Route, Calculator, Wallet, ChartColumn, ListOrdered, Receipt, ListChecks, Files, Workflow, Archive, KeyRound, Webhook, Inbox, CalendarClock, Timer } from "lucide-react";
 
 interface MenuItem { id:string; app_id?:string; app_name?:string; parent_id?:string; label:string; path?:string; icon:string; order:number }
 interface AppNav { id:string; name:string; icon:string; path:string; menus:MenuItem[] }
 
+// Every icon the server can name in a menu definition. A name missing here
+// falls back to a generic box, which is why the sub-menus under an app used to
+// render as a column of identical squares — the blueprint icons in
+// platform/menu were never mapped.
 const iconMap: Record<string, React.ReactNode> = {
   users:<Users className="w-5 h-5"/>, package:<Package className="w-5 h-5"/>, boxes:<Boxes className="w-5 h-5"/>,
   "credit-card":<CreditCard className="w-5 h-5"/>, "file-text":<FileText className="w-5 h-5"/>, code:<Code2 className="w-5 h-5"/>, landmark:<Landmark className="w-5 h-5"/>,
-  "pen-tool":<PenTool className="w-5 h-5"/>,
+  "pen-tool":<PenTool className="w-5 h-5"/>, settings:<Settings className="w-5 h-5"/>,
+  // esign
+  "scroll-text":<ScrollText className="w-5 h-5"/>, layers:<Layers className="w-5 h-5"/>,
+  move:<Move className="w-5 h-5"/>, "server-cog":<ServerCog className="w-5 h-5"/>,
+  "shield-check":<ShieldCheck className="w-5 h-5"/>,
+  // contacts
+  activity:<Activity className="w-5 h-5"/>, copy:<Copy className="w-5 h-5"/>, upload:<Upload className="w-5 h-5"/>,
+  // products
+  tags:<Tags className="w-5 h-5"/>, "badge-dollar-sign":<BadgeDollarSign className="w-5 h-5"/>,
+  ruler:<Ruler className="w-5 h-5"/>, sliders:<Sliders className="w-5 h-5"/>, percent:<Percent className="w-5 h-5"/>,
+  // inventory
+  "arrow-right-left":<ArrowRightLeft className="w-5 h-5"/>, "refresh-cw":<RefreshCw className="w-5 h-5"/>,
+  warehouse:<Warehouse className="w-5 h-5"/>, route:<Route className="w-5 h-5"/>, calculator:<Calculator className="w-5 h-5"/>,
+  // billing
+  wallet:<Wallet className="w-5 h-5"/>, "chart-column":<ChartColumn className="w-5 h-5"/>,
+  "list-ordered":<ListOrdered className="w-5 h-5"/>, receipt:<Receipt className="w-5 h-5"/>,
+  // documents
+  "list-checks":<ListChecks className="w-5 h-5"/>, files:<Files className="w-5 h-5"/>,
+  workflow:<Workflow className="w-5 h-5"/>, archive:<Archive className="w-5 h-5"/>,
+  // developer portal
+  "key-round":<KeyRound className="w-5 h-5"/>, webhook:<Webhook className="w-5 h-5"/>,
+  // gov services
+  inbox:<Inbox className="w-5 h-5"/>, "calendar-clock":<CalendarClock className="w-5 h-5"/>, timer:<Timer className="w-5 h-5"/>,
 };
 // Routes that render without the ERP chrome. /oauth/consent is signed-in but
 // belongs here too: it is an identity handoff to another product, and framing
@@ -85,17 +111,17 @@ export default function Layout({children}:{children:React.ReactNode}){
   return <div className="gerege-shell min-h-screen flex flex-col">
     <header className="gerege-topbar h-16 flex items-center border-b sticky top-0 z-50">
       <Link href="/apps" className="gerege-header-brand w-16 h-full shrink-0 grid place-items-center border-r border-[var(--gerege-border)]">
-        {theme.design==="gerege"?<img src={brandLogo.src} width={36} height={36} alt="Gerege" className="w-9 h-9 rounded-lg shadow-sm"/>:<span className="original-brand-mark w-9 h-9 rounded-lg grid place-items-center"><Building2 className="w-6 h-6"/></span>}
+        {theme.design==="gerege"?<img src={brandLogo.src} width={36} height={36} alt="Gerege Nexus" className="w-9 h-9 rounded-lg shadow-sm"/>:<span className="original-brand-mark w-9 h-9 rounded-lg grid place-items-center"><Building2 className="w-6 h-6"/></span>}
       </Link>
       <div className={`gerege-header-context h-full flex items-center gap-3 overflow-hidden transition-all duration-200 ${panelOpen?"is-open":""}`}>
         <span className="shrink-0 text-[var(--gerege-blue)]">{selected?(iconMap[selected.icon]||<Package className="w-5 h-5"/>):<LayoutGrid className="w-5 h-5"/>}</span>
-        <span className="min-w-0"><small className="block text-[11px] leading-4 text-slate-500 truncate">Gerege ERP</small><strong className="block text-[15px] leading-5 text-slate-900 truncate">{brandTitle}</strong></span>
+        <span className="min-w-0"><small className="block text-[11px] leading-4 text-slate-500 truncate">Gerege Nexus</small><strong className="block text-[15px] leading-5 text-slate-900 truncate">{brandTitle}</strong></span>
       </div>
       <div className="gerege-menu-toggle w-16 h-full shrink-0 grid place-items-center"><button onClick={togglePanel} className="grid place-items-center w-10 h-10 rounded-lg text-slate-600 hover:bg-slate-50" aria-label={t("web.action.toggle_menu")} aria-expanded={mobileOpen}><MenuIcon className="w-5 h-5"/></button></div>
       <div className="hidden lg:flex items-center gap-2 px-4 min-w-0"><span className="gerege-session-dot w-2 h-2 rounded-full shrink-0"/><strong className="text-base text-slate-800 font-semibold truncate max-w-56">{user?.tenant_name||"Demo Tenant"}</strong></div>
       <div className="gerege-header-search hidden md:flex flex-1 items-center justify-center min-w-0 px-5 relative">
         <div className="relative w-full max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&results[0]){router.push(results[0].path);setQuery("")}}} placeholder={t("web.view.search_placeholder")} className="w-full h-10 rounded-full border border-slate-200 bg-slate-100/80 pl-10 pr-4 text-sm outline-none focus:border-[var(--gerege-blue)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--gerege-blue)_15%,transparent)]"/>
-          {results.length>0&&<div className="absolute top-12 inset-x-0 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 z-[70]">{results.map(item=><button key={item.path} onClick={()=>{router.push(item.path);setQuery("")}} className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-[var(--gerege-surface-2)]"><span className="text-[var(--gerege-blue)]">{iconMap[item.icon]||<Search className="w-4 h-4"/>}</span><span className="min-w-0"><strong className="block text-sm truncate">{item.label}</strong><small className="text-slate-500 truncate">{item.app}</small></span></button>)}</div>}
+          {results.length>0&&<div className="gerege-topbar-onlight absolute top-12 inset-x-0 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 z-[70]">{results.map(item=><button key={item.path} onClick={()=>{router.push(item.path);setQuery("")}} className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-[var(--gerege-surface-2)]"><span className="text-[var(--gerege-blue)]">{iconMap[item.icon]||<Search className="w-4 h-4"/>}</span><span className="min-w-0"><strong className="block text-sm truncate">{item.label}</strong><small className="text-slate-500 truncate">{item.app}</small></span></button>)}</div>}
         </div>
       </div>
       <div className="gerege-header-user flex pr-2 sm:pr-4 lg:pr-6"><UserMenu user={user} onLogout={logout}/></div>

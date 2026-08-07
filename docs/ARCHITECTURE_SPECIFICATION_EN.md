@@ -1,7 +1,7 @@
 # Architecture Specification
 
 System architecture, layering and technical decisions behind the
-**Gerege Template Platform**.
+**Gerege Nexus**.
 
 <p>
   <a href="ARCHITECTURE_SPECIFICATION.md"><img src="assets/icons/flag-mn.png" width="18" height="18" alt=""> Монгол</a>
@@ -15,9 +15,9 @@ System architecture, layering and technical decisions behind the
 
 ## 1. System overview
 
-**Gerege Template Platform** is a high-performance **modular monolith ERP and
-business application platform** wired directly into Mongolia's national digital
-infrastructure.
+**Gerege Nexus** is a high-performance **modular monolith platform** that
+connects services, operations, systems, and data across public and private
+organizations, wired directly into Mongolia's national digital infrastructure.
 
 ### 1.1 High-performance modular monolith
 
@@ -61,7 +61,7 @@ infrastructure.
 
 ```
 +-----------------------------------------------------------------------------------+
-|                              Gerege Template Platform                             |
+|                              Gerege Nexus                             |
 +-----------------------------------------------------------------------------------+
                                           |
                 +-------------------------+-------------------------+

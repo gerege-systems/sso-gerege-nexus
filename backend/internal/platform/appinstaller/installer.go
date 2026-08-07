@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/appcatalog"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/appregistry"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/audit"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appcatalog"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -153,8 +153,14 @@ func (ai *AppInstaller) InstallApp(ctx context.Context, tenantID, appSlug, userI
 				roleCode string
 				allowed  bool
 			}{
-				{roleCode: "manager", allowed: strings.HasSuffix(perm.Code, ".read") || strings.HasSuffix(perm.Code, ".manage") || perm.Code == "gov.process" || perm.Code == "gov.delegate" || perm.Code == "gov.verify" || perm.Code == "gov.report"},
-				{roleCode: "user", allowed: strings.HasSuffix(perm.Code, ".read") || perm.Code == "gov.apply"},
+				{roleCode: "manager", allowed: strings.HasSuffix(perm.Code, ".read") || strings.HasSuffix(perm.Code, ".manage") || perm.Code == "gov.process" || perm.Code == "gov.delegate" || perm.Code == "gov.verify" || perm.Code == "gov.report" || perm.Code == "esign.sign"},
+				// esign.sign reaches ordinary users deliberately. The authority
+				// to sign is the citizen's own — an eID signature is made with
+				// their PIN2 on their own phone, and the HSM rail makes them
+				// prove a certificate — so withholding it would only stop
+				// people signing their own documents. Uploading and configuring
+				// remain behind esign.manage.
+				{roleCode: "user", allowed: strings.HasSuffix(perm.Code, ".read") || perm.Code == "gov.apply" || perm.Code == "esign.sign"},
 			} {
 				if !grant.allowed {
 					continue

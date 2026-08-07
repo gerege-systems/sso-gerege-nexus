@@ -4,8 +4,12 @@
  */
 export const ai = {
   "ai.view.title": { mn: "AI Туслах", en: "AI Copilot" },
-  "ai.view.subtitle": { mn: "ERP AI туслах", en: "ERP AI Assistant" },
+  "ai.view.subtitle": { mn: "Gerege Nexus AI туслах", en: "Gerege Nexus AI Assistant" },
   "ai.view.placeholder": { mn: "AI туслахаас асуу...", en: "Ask AI Copilot..." },
+  // Shown under the panel title. Was a hard-coded English literal in
+  // AICopilot.tsx; it names the model and the guarantee that tools stay inside
+  // the current tenant, so it belongs in the dictionary like everything else.
+  "ai.view.engine_note": { mn: "Gemini · tenant-д хязгаарлагдсан платформ хэрэгслүүд", en: "Gemini · tenant-safe platform tools" },
   "ai.view.tab_chat": { mn: "AI чат", en: "Chat" },
   "ai.view.tab_translate": { mn: "Орчуулга", en: "Translate" },
   "ai.view.translate_placeholder": { mn: "Орчуулах текст…", en: "Text to translate…" },
@@ -29,8 +33,8 @@ export const ai = {
   "ai.action.add_knowledge": { mn: "Мэдлэг нэмэх", en: "Add knowledge" },
 
   "ai.message.greeting": {
-    mn: "Сайн байна уу. ERP өгөгдөл, бараа материал, харилцагч болон системийн ажиллагааны талаар асуугаарай.",
-    en: "Hello. Ask me about your ERP data, stock, contacts or how the system works.",
+    mn: "Сайн байна уу. Байгууллагын өгөгдөл, бараа материал, харилцагч болон системийн ажиллагааны талаар асуугаарай.",
+    en: "Hello. Ask me about your organization data, stock, contacts or how the system works.",
   },
   "ai.message.voice_message": { mn: "🎙 Дуут мессеж", en: "🎙 Voice message" },
   "ai.message.microphone_denied": { mn: "Микрофонд хандах боломжгүй байна.", en: "The microphone is not available." },

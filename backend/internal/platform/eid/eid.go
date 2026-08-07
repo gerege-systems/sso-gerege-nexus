@@ -1,5 +1,5 @@
 /*
- * Gerege Template Platform
+ * Gerege Nexus
  * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -23,7 +23,7 @@ import (
 	"time"
 
 	coreeid "github.com/gerege-systems/open-gerege-core/pkg/eid"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/config"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
 )
 
 // PollWindow is how long the relying party holds a session poll open before it
@@ -57,6 +57,12 @@ type EIDIdentity struct {
 	SignatureHash   string     `json:"signature_hash"`  // Тоон гарын үсгийн хеш
 	VerifiedStatus  bool       `json:"verified_status"` // Төрийн сангийн баталгаажуулалт
 	AuthenticatedAt time.Time  `json:"authenticated_at"`
+	// CertificateSerial and CertificateIssuer identify the certificate the citizen
+	// approved with. eID returns them only on a completed session, and they are
+	// the durable reference an e-signature record should keep: a session id says
+	// an approval happened, a certificate says whose key gave it.
+	CertificateSerial string `json:"certificate_serial,omitempty"`
+	CertificateIssuer string `json:"certificate_issuer,omitempty"`
 }
 
 type Provider interface {
@@ -99,6 +105,11 @@ func NewEIDService() *EIDService {
 	mock := config.MockEnabled("EID_MOCK_MODE")
 	clientID := os.Getenv("EID_CLIENT_ID")
 	if clientID == "" {
+		// Legacy compatibility name, kept deliberately through the Gerege Nexus
+		// rebrand: this is the client ID registered with the identity provider,
+		// not a display string. Renaming it here would not rename it there, and
+		// the mismatch would fail every sign-in. Change it only alongside a new
+		// registration, via EID_CLIENT_ID.
 		clientID = "gerege-open-erp-client"
 	}
 	clientSecret := os.Getenv("EID_CLIENT_SECRET")
@@ -126,7 +137,7 @@ func NewEIDService() *EIDService {
 		httpClient:   &http.Client{Timeout: 15 * time.Second},
 		rpClient: coreeid.NewClient(
 			os.Getenv("EID_BASE_URL"), os.Getenv("EID_RP_UUID"),
-			valueOr(os.Getenv("EID_RP_NAME"), "Gerege ERP"), os.Getenv("EID_RP_SECRET"),
+			valueOr(os.Getenv("EID_RP_NAME"), "Gerege Nexus"), os.Getenv("EID_RP_SECRET"),
 			valueOr(os.Getenv("EID_CERT_LEVEL"), "ADVANCED"),
 		),
 		mockSessions: make(map[string]mockSession),
@@ -145,7 +156,7 @@ func (s *EIDService) StartDeviceLink(ctx context.Context, callbackURL string) (*
 	if s.mockMode {
 		return s.startMock("", true), nil
 	}
-	started, err := s.rpClient.QRInitiate(ctx, valueOr(os.Getenv("EID_DISPLAY_TEXT"), "Gerege ERP-д нэвтрэх"), callbackURL, "")
+	started, err := s.rpClient.QRInitiate(ctx, valueOr(os.Getenv("EID_DISPLAY_TEXT"), "Gerege Nexus-д нэвтрэх"), callbackURL, "")
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +172,35 @@ func (s *EIDService) StartByNationalID(ctx context.Context, nationalID, callback
 	if s.mockMode {
 		return s.startMock(nationalID, false), nil
 	}
-	started, err := s.rpClient.Initiate(ctx, nationalID, valueOr(os.Getenv("EID_DISPLAY_TEXT"), "Gerege ERP-д нэвтрэх"), callbackURL)
+	started, err := s.rpClient.Initiate(ctx, nationalID, valueOr(os.Getenv("EID_DISPLAY_TEXT"), "Gerege Nexus-д нэвтрэх"), callbackURL)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeStart(started), nil
+}
+
+// StartSignature pushes an approval request that names what is being signed, so
+// the citizen reads the document on their own device rather than a generic
+// sign-in prompt.
+//
+// eID has no separate document-signing endpoint: the approval a citizen gives
+// with their own credentials *is* the signature, and the display text is the only
+// thing that tells them what they are approving. Everything after this — session
+// id, verification code, polling — is the sign-in flow's, which is why callers
+// finish with Poll.
+func (s *EIDService) StartSignature(ctx context.Context, nationalID, displayText, callbackURL string) (*StartResult, error) {
+	nationalID = strings.ToUpper(strings.TrimSpace(nationalID))
+	if len(nationalID) < 8 {
+		return nil, errors.New("invalid registration number")
+	}
+	displayText = strings.TrimSpace(displayText)
+	if displayText == "" {
+		return nil, errors.New("display text is required: the citizen has to see what they are approving")
+	}
+	if s.mockMode {
+		return s.startMock(nationalID, false), nil
+	}
+	started, err := s.rpClient.Initiate(ctx, nationalID, displayText, callbackURL)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +261,12 @@ func (s *EIDService) Poll(ctx context.Context, sessionID string) (*PollResult, e
 	if session.State == coreeid.StateComplete && session.Identity != nil {
 		id := session.Identity
 		result.Identity = &EIDIdentity{CivilID: id.CivilID, RegNumber: id.NationalID, FirstName: id.GivenName, LastName: id.Surname, AuthMethod: AuthMethodPKISignature, VerifiedStatus: true, AuthenticatedAt: time.Now()}
+		// The certificate is optional — a login does not stop when it cannot be
+		// parsed — but when it is there it is what an e-signature record anchors on.
+		if cert := id.Certificate; cert != nil {
+			result.Identity.CertificateSerial = cert.Serial
+			result.Identity.CertificateIssuer = cert.Issuer
+		}
 	}
 	return result, nil
 }

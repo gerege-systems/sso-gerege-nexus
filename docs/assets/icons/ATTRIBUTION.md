@@ -14,6 +14,19 @@ the repository rather than hotlinked from the Flaticon CDN.
 | `flag-en.png` | United States (circle flag) | [Freepik](https://www.freepik.com) | [Flaticon](https://www.flaticon.com/free-icon/united-states_197484) |
 | `flag-zh.png` | China (circle flag) | [Freepik](https://www.freepik.com) | [Flaticon](https://www.flaticon.com/free-icon/china_197375) |
 | `flag-ru.png` | Russia (circle flag) | [Freepik](https://www.freepik.com) | [Flaticon](https://www.flaticon.com/free-icon/russia_197408) |
+| `flag-ar.png` | Saudi Arabia (circle flag) | [Freepik](https://www.freepik.com) | [Flaticon](https://www.flaticon.com/free-icon/saudi-arabia_197578) |
+| `flag-fr.png` | France (circle flag) | [Freepik](https://www.freepik.com) | [Flaticon](https://www.flaticon.com/free-icon/france_197560) |
+| `flag-es.png` | Spain (circle flag) | [Freepik](https://www.freepik.com) | [Flaticon](https://www.flaticon.com/free-icon/spain_197593) |
+
+Хэлийг тугаар төлөөлүүлэх нь төгс биш — хэл, улс хоёр давхцдаггүй. Энэ репо
+аль хэдийн тэр жишгийг барьсан (`flag-en` нь АНУ-ын туг), тиймээс шинэ гурав нь
+мөн адил хамгийн өргөн танигдах тугийг авсан: араб хэлэнд Саудын Араб, франц
+хэлэнд Франц, испани хэлэнд Испани.
+
+Representing a language with a flag is imperfect — languages and countries do
+not map onto each other. The repository already follows that convention
+(`flag-en` is the United States flag), so the three new entries stay consistent
+with it rather than introducing a second scheme.
 
 Icons made by [Freepik](https://www.freepik.com) from
 [www.flaticon.com](https://www.flaticon.com/).

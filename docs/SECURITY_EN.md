@@ -19,7 +19,7 @@
 
 ## Reporting a vulnerability
 
-We take the security of `open-gerege-mn-erp` seriously. If you believe you have
+We take the security of `open-gerege-nexus` seriously. If you believe you have
 found a vulnerability, please disclose it responsibly.
 
 ### How to report

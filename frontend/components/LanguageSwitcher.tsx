@@ -7,7 +7,10 @@ import { LOCALES, useI18n } from "@/lib/i18n";
  * see docs/assets/icons/ATTRIBUTION.md.
  */
 export default function LanguageSwitcher({ variant = "light" }: { variant?: "light" | "dark" }) {
-  const { locale, setLocale, t } = useI18n();
+  const { locale, setLocale, availableLocales, t } = useI18n();
+  // Only the languages this device has switched on — the full LOCALES list is
+  // the catalogue, not the offer.
+  const offered = LOCALES.filter((option) => availableLocales.includes(option.code));
 
   const base =
     variant === "dark"
@@ -28,7 +31,7 @@ export default function LanguageSwitcher({ variant = "light" }: { variant?: "lig
       role="group"
       aria-label={t("base.field.language")}
     >
-      {LOCALES.map((option) => (
+      {offered.map((option) => (
         <button
           key={option.code}
           type="button"

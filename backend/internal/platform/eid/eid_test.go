@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/eid"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/eid"
 )
 
 func TestEIDServiceMockOAuth2Exchange(t *testing.T) {

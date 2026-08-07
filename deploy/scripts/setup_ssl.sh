@@ -1,9 +1,9 @@
 #!/bin/bash
-# Script to issue and configure free SSL certificate via Let's Encrypt Certbot for openerp.gerege.mn
+# Script to issue and configure free SSL certificate via Let's Encrypt Certbot for sso.gerege.mn
 
 set -e
 
-DOMAIN="openerp.gerege.mn"
+DOMAIN="sso.gerege.mn"
 EMAIL="admin@gerege.mn"
 
 echo "==== SSL Certificate Provisioning for ${DOMAIN} ===="

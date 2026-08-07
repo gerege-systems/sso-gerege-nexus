@@ -1,128 +1,282 @@
 "use client";
 
-/**
- * Signature logs.
- *
- * esign_signature_logs has been written on every certificate check and signing
- * since the e-sign app shipped, and GET /esign/logs has been serving it — with
- * nothing reading either. This is the audit trail those rows were for.
- */
-
-import { useEffect, useMemo, useState } from "react";
-import { FileSignature, ScrollText } from "lucide-react";
-import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useState } from "react";
+import { Download, ScrollText, Search } from "lucide-react";
+import { esign, saveBlob, type LogFilter, type SignatureLogEntry } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
-import { Chip, Empty, ErrorNote, Loading, Panel, Screen } from "@/components/module/kit";
+import {
+  Banner,
+  EmptyState,
+  Loading,
+  OutcomeBadge,
+  PageHeader,
+  Pager,
+  useErrorMessage,
+} from "@/components/esign/shared";
 
-type Log = {
-  id: string; document_id: string; reg_no: string; phone_no: string;
-  first_name: string; last_name: string; action: string; created_at: string;
-};
+const PAGE_SIZE = 50;
 
-/** mask keeps enough of an identifier to recognise, not enough to reuse. */
-function mask(value: string, keep = 2) {
-  const trimmed = (value || "").trim();
-  if (trimmed.length <= keep) return trimmed || "—";
-  return trimmed.slice(0, keep) + "•".repeat(Math.max(3, trimmed.length - keep - 2)) + trimmed.slice(-2);
-}
-
-export default function SignatureLogsPage() {
+/**
+ * The signature log — every certificate check, ceremony and download with its
+ * outcome.
+ *
+ * Failures are the point. The original log only ever recorded successes, so a
+ * refused or expired signature left no trace, which is exactly the event an
+ * auditor comes here looking for.
+ */
+export default function EsignLogsPage() {
   const { t } = useI18n();
-  const [logs, setLogs] = useState<Log[]>([]);
+  const describe = useErrorMessage();
+  const [entries, setEntries] = useState<SignatureLogEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [filter, setFilter] = useState<LogFilter>({});
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [filter, setFilter] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void (async () => {
+  const load = useCallback(
+    async (nextOffset: number, nextFilter: LogFilter) => {
+      setLoading(true);
       try {
-        setLogs(((await api.getEsignLogs()) as Log[]) || []);
+        const page = await esign.logs({ ...nextFilter, limit: PAGE_SIZE, offset: nextOffset });
+        setEntries(page.items || []);
+        setTotal(page.total);
+        setOffset(nextOffset);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("base.message.error"));
+        setError(describe(err, t("base.message.error")));
       } finally {
         setLoading(false);
       }
-    })();
-  }, [t]);
+    },
+    [t],
+  );
 
-  const actions = useMemo(() => [...new Set(logs.map((l) => l.action))].sort(), [logs]);
-  const shown = useMemo(() => (filter ? logs.filter((l) => l.action === filter) : logs), [logs, filter]);
+  useEffect(() => {
+    void load(0, {});
+  }, [load]);
+
+  const applyFilter = (patch: Partial<LogFilter>) => {
+    const next = { ...filter, ...patch };
+    setFilter(next);
+    // Any filter change resets to the first page; keeping the offset would
+    // land on an empty page whenever the result set shrank.
+    void load(0, next);
+  };
+
+  const submitSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    applyFilter({ q: search.trim() || undefined });
+  };
+
+  const exportCsv = async () => {
+    try {
+      saveBlob(await esign.exportLogs(filter), "esign-signature-log.csv");
+    } catch (err) {
+      setError(describe(err, t("base.message.error")));
+    }
+  };
 
   return (
-    <Screen
-      icon={<ScrollText className="w-5 h-5" />}
-      title={t("mod.esign.logs.title")}
-      subtitle={t("mod.esign.logs.subtitle")}
-      action={
-        actions.length > 1 && (
-          <div className="flex flex-wrap gap-1">
-            <button
-              onClick={() => setFilter("")}
-              className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border ${filter === "" ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`}
-            >
-              all
-            </button>
-            {actions.map((action) => (
-              <button
-                key={action}
-                onClick={() => setFilter(action)}
-                className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border ${filter === action ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`}
-              >
-                {action}
-              </button>
-            ))}
-          </div>
-        )
-      }
-    >
-      {error && <ErrorNote>{error}</ErrorNote>}
-      <Panel className="p-4 bg-slate-50">
-        <p className="text-xs text-slate-600">{t("mod.esign.logs.masked_note")}</p>
-      </Panel>
+    <div className="space-y-6">
+      <PageHeader
+        icon={<ScrollText className="w-7 h-7 text-indigo-600" />}
+        title={t("esign.view.logs_title")}
+        subtitle={t("esign.view.logs_subtitle")}
+        actions={
+          <button
+            onClick={exportCsv}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            {t("esign.action.export_csv")}
+          </button>
+        }
+      />
 
-      {loading ? (
-        <Loading label={t("base.message.loading")} />
-      ) : shown.length === 0 ? (
-        <Empty icon={<FileSignature className="w-9 h-9 mx-auto" />}>{t("mod.esign.logs.none")}</Empty>
-      ) : (
-        <Panel className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-2.5 font-semibold">{t("mod.esign.logs.when")}</th>
-                  <th className="px-4 py-2.5 font-semibold">{t("mod.esign.logs.action")}</th>
-                  <th className="px-4 py-2.5 font-semibold">{t("mod.esign.logs.signer")}</th>
-                  <th className="px-4 py-2.5 font-semibold">{t("mod.esign.logs.document")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {shown.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Chip mono tone={log.action === "SIGN" ? "emerald" : "slate"}>{log.action}</Chip>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-slate-900">
-                        {[log.last_name, log.first_name].filter(Boolean).join(" ") || "—"}
-                      </span>
-                      <span className="block text-[11px] font-mono text-slate-400">
-                        {mask(log.reg_no)} · {mask(log.phone_no)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-[11px] text-slate-400">
-                      {log.document_id ? log.document_id.slice(0, 8) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {error && <Banner tone="error" message={error} onDismiss={() => setError(null)} />}
+
+      <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-wrap gap-3 items-end">
+        <form onSubmit={submitSearch} className="flex-1 min-w-[220px]">
+          <label htmlFor="log-search" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            {t("base.action.search")}
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              id="log-search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("esign.field.search_placeholder")}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
           </div>
-        </Panel>
-      )}
-    </Screen>
+        </form>
+
+        <Select
+          id="log-action"
+          label={t("esign.field.action")}
+          value={filter.action ?? ""}
+          onChange={(value) => applyFilter({ action: value || undefined })}
+          options={[
+            ["", t("base.label.all")],
+            ["SIGN", t("esign.action_type.sign")],
+            ["SIGN_START", t("esign.action_type.sign_start")],
+            ["BATCH_SIGN", t("esign.action_type.batch_sign")],
+            ["CERT_CHECK", t("esign.action_type.cert_check")],
+            ["DOWNLOAD", t("esign.action_type.download")],
+          ]}
+        />
+
+        <Select
+          id="log-outcome"
+          label={t("esign.field.outcome")}
+          value={filter.outcome ?? ""}
+          onChange={(value) => applyFilter({ outcome: value || undefined })}
+          options={[
+            ["", t("base.label.all")],
+            ["OK", t("esign.outcome.ok")],
+            ["FAILED", t("esign.outcome.failed")],
+            ["REJECTED", t("esign.outcome.rejected")],
+            ["EXPIRED", t("esign.outcome.expired")],
+            ["CANCELLED", t("esign.outcome.cancelled")],
+          ]}
+        />
+
+        <Select
+          id="log-provider"
+          label={t("esign.field.provider")}
+          value={filter.provider ?? ""}
+          onChange={(value) => applyFilter({ provider: value || undefined })}
+          options={[
+            ["", t("base.label.all")],
+            ["EID", "eID Mongolia"],
+            ["HSM", "Gerege eSign HSM"],
+          ]}
+        />
+
+        <div>
+          <label htmlFor="log-from" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            {t("esign.field.from")}
+          </label>
+          <input
+            id="log-from"
+            type="date"
+            value={filter.from ?? ""}
+            onChange={(event) => applyFilter({ from: event.target.value || undefined })}
+            className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="log-to" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            {t("esign.field.to")}
+          </label>
+          <input
+            id="log-to"
+            type="date"
+            value={filter.to ?? ""}
+            onChange={(event) => applyFilter({ to: event.target.value || undefined })}
+            className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+      </section>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+        {loading ? (
+          <div className="p-6">
+            <Loading />
+          </div>
+        ) : (
+          <table className="w-full text-left text-xs text-slate-600">
+            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
+              <tr>
+                <th className="px-4 py-3">{t("base.field.date")}</th>
+                <th className="px-4 py-3">{t("esign.field.action")}</th>
+                <th className="px-4 py-3">{t("esign.field.outcome")}</th>
+                <th className="px-4 py-3">{t("esign.field.document")}</th>
+                <th className="px-4 py-3">{t("esign.field.signer")}</th>
+                <th className="px-4 py-3">{t("esign.field.provider")}</th>
+                <th className="px-4 py-3">{t("esign.field.detail")}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {entries.length === 0 && (
+                <tr>
+                  <td colSpan={7}>
+                    <EmptyState message={t("esign.message.logs_empty")} />
+                  </td>
+                </tr>
+              )}
+              {entries.map((entry) => (
+                <tr key={entry.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 whitespace-nowrap text-slate-500">
+                    {new Date(entry.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-slate-800">{entry.action}</td>
+                  <td className="px-4 py-3">
+                    <OutcomeBadge outcome={entry.outcome} />
+                  </td>
+                  <td className="px-4 py-3">{entry.document_title || <span className="text-slate-400">—</span>}</td>
+                  <td className="px-4 py-3">
+                    {[entry.last_name, entry.first_name].filter(Boolean).join(" ") || entry.reg_no || (
+                      <span className="text-slate-400">—</span>
+                    )}
+                    {entry.reg_no && (entry.first_name || entry.last_name) && (
+                      <div className="text-[10px] text-slate-400 font-mono">{entry.reg_no}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-[11px]">{entry.provider}</td>
+                  <td className="px-4 py-3 text-slate-500 max-w-xs truncate" title={entry.detail}>
+                    {entry.detail || <span className="text-slate-400">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <Pager
+        total={total}
+        offset={offset}
+        pageSize={PAGE_SIZE}
+        onPage={(next) => load(next, filter)}
+      />
+    </div>
   );
 }
+
+function Select({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: [string, string][];
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500"
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+

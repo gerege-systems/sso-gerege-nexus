@@ -1,5 +1,5 @@
 /*
- * Gerege Template Platform
+ * Gerege Nexus
  * Copyright (c) 2026 Gerege Systems Development Team, Gemini AI & Claude AI
  * Distributed under the Apache 2.0 License.
  *
@@ -18,9 +18,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/audit"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/auth"
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/tenant"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // actorFrom resolves the caller into permissions and organisational scope. It

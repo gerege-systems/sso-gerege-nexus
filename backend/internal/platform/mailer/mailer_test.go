@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gerege-systems/open-gerege-mn-erp/backend/internal/platform/mailer"
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/mailer"
 )
 
 type mockSyncMailer struct {

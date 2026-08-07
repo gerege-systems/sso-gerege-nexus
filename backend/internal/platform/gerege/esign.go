@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/gerege-systems/open-gerege-nexus/backend/internal/platform/config"
 )
 
 // EsignCertRequest is the payload for validating a citizen's digital signature
@@ -88,7 +90,17 @@ func NewEsignService() *EsignService {
 	if signURL == "" {
 		signURL = "https://hsm.gerege.mn/signer/signpdf"
 	}
-	mock := os.Getenv("ESIGN_MOCK_MODE") != "false"
+	// Mock mode is never implicit in production — the same rule the E-ID, DAN
+	// and XYP connectors already follow.
+	//
+	// The previous rule was `os.Getenv("ESIGN_MOCK_MODE") != "false"`, i.e. mock
+	// on unless explicitly disabled, and the production compose file sets no
+	// ESIGN_* variables at all. Mock SignPDF returns the submitted PDF
+	// unchanged, so every document signed on the deployed instance was stored
+	// with status SIGNED and byte-identical, entirely unsigned content. A
+	// signature that silently is not one is worse than a signing error: the
+	// error is visible, the fake is not.
+	mock := config.MockEnabled("ESIGN_MOCK_MODE")
 	token := os.Getenv("ESIGN_TOKEN")
 
 	return &EsignService{
