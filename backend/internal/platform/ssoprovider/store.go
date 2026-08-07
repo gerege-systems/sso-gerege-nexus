@@ -556,3 +556,156 @@ func mustMarshalPKCS8(key *rsa.PrivateKey) []byte {
 	}
 	return der
 }
+
+// ClientActivity is one client's live footprint, for the portal's audit screen.
+type ClientActivity struct {
+	ClientID       string     `json:"client_id"`
+	ClientName     string     `json:"client_name"`
+	ClientType     string     `json:"client_type"`
+	Disabled       bool       `json:"disabled"`
+	ActiveAccess   int        `json:"active_access_tokens"`
+	ActiveRefresh  int        `json:"active_refresh_tokens"`
+	ConsentedUsers int        `json:"consented_users"`
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+}
+
+// ConsentRecord is one user's standing grant to one client.
+type ConsentRecord struct {
+	ClientID   string    `json:"client_id"`
+	ClientName string    `json:"client_name"`
+	UserID     string    `json:"user_id"`
+	UserEmail  string    `json:"user_email"`
+	UserName   string    `json:"user_name"`
+	Scopes     []string  `json:"scopes"`
+	GrantedAt  time.Time `json:"granted_at"`
+}
+
+// ClientActivityByTenant reports live tokens and consents per client.
+//
+// Scoped by which tenant *owns the client*, not by the tenant on the token: a
+// client owned here can sign in a user from elsewhere, and its owner is the
+// one who needs to see that it did.
+func (s *Store) ClientActivityByTenant(ctx context.Context, tenantID string) ([]ClientActivity, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT c.client_id, c.client_name, c.client_type, c.disabled, c.last_used_at,
+		       count(*) FILTER (WHERE t.token_type = 'access'  AND t.revoked_at IS NULL AND t.expires_at > NOW()),
+		       count(*) FILTER (WHERE t.token_type = 'refresh' AND t.revoked_at IS NULL AND t.expires_at > NOW()),
+		       (SELECT count(*) FROM oauth2_consents oc WHERE oc.client_id = c.client_id)
+		  FROM oauth2_clients c
+		  LEFT JOIN oauth2_tokens t ON t.client_id = c.client_id
+		 WHERE c.tenant_id = $1
+		 GROUP BY c.client_id, c.client_name, c.client_type, c.disabled, c.last_used_at, c.created_at
+		 ORDER BY c.created_at DESC`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	activity := make([]ClientActivity, 0, 8)
+	for rows.Next() {
+		var a ClientActivity
+		if err := rows.Scan(&a.ClientID, &a.ClientName, &a.ClientType, &a.Disabled, &a.LastUsedAt,
+			&a.ActiveAccess, &a.ActiveRefresh, &a.ConsentedUsers); err != nil {
+			return nil, err
+		}
+		activity = append(activity, a)
+	}
+	return activity, rows.Err()
+}
+
+// ConsentsByTenant lists the standing grants against this tenant's clients.
+func (s *Store) ConsentsByTenant(ctx context.Context, tenantID string, limit int) ([]ConsentRecord, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT c.client_id, c.client_name, u.id::text, u.email, u.name, oc.scopes, oc.granted_at
+		  FROM oauth2_consents oc
+		  JOIN oauth2_clients c ON c.client_id = oc.client_id
+		  JOIN users u ON u.id = oc.user_id
+		 WHERE c.tenant_id = $1
+		 ORDER BY oc.granted_at DESC
+		 LIMIT $2`, tenantID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	records := make([]ConsentRecord, 0, 16)
+	for rows.Next() {
+		var r ConsentRecord
+		if err := rows.Scan(&r.ClientID, &r.ClientName, &r.UserID, &r.UserEmail, &r.UserName,
+			&r.Scopes, &r.GrantedAt); err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	return records, rows.Err()
+}
+
+// RevokeClientTokens kills every live token a tenant's client holds — the
+// switch to pull when a credential is suspected leaked but the integration
+// itself should survive.
+func (s *Store) RevokeClientTokens(ctx context.Context, tenantID, clientID string) (int64, error) {
+	tag, err := s.db.Exec(ctx, `
+		UPDATE oauth2_tokens t SET revoked_at = NOW()
+		  FROM oauth2_clients c
+		 WHERE t.client_id = c.client_id
+		   AND c.tenant_id = $1 AND c.client_id = $2
+		   AND t.revoked_at IS NULL`, tenantID, clientID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// WithdrawConsent removes one user's grant to a tenant's client, and the tokens
+// issued under it. The tenant guard is in the subquery: withdrawing consent on
+// someone else's client is not this tenant's call.
+func (s *Store) WithdrawConsent(ctx context.Context, tenantID, clientID, userID string) error {
+	tag, err := s.db.Exec(ctx, `
+		DELETE FROM oauth2_consents oc
+		 WHERE oc.client_id = $2 AND oc.user_id = $3
+		   AND EXISTS (SELECT 1 FROM oauth2_clients c
+		                WHERE c.client_id = oc.client_id AND c.tenant_id = $1)`,
+		tenantID, clientID, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	_, err = s.db.Exec(ctx, `
+		UPDATE oauth2_tokens SET revoked_at = NOW()
+		 WHERE client_id = $1 AND user_id = $2 AND revoked_at IS NULL`, clientID, userID)
+	return err
+}
+
+// SigningKeyInfo describes a published key without any private material.
+type SigningKeyInfo struct {
+	KID       string     `json:"kid"`
+	Algorithm string     `json:"algorithm"`
+	Active    bool       `json:"active"`
+	CreatedAt time.Time  `json:"created_at"`
+	RetiredAt *time.Time `json:"retired_at,omitempty"`
+}
+
+// SigningKeys lists the keys behind the JWKS. Deliberately no private_key_pem
+// column in the SELECT: the portal never has a reason to see one, so the query
+// cannot leak one by accident.
+func (s *Store) SigningKeys(ctx context.Context) ([]SigningKeyInfo, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT kid, algorithm, active, created_at, retired_at
+		   FROM oauth2_signing_keys ORDER BY active DESC, created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	keys := make([]SigningKeyInfo, 0, 2)
+	for rows.Next() {
+		var k SigningKeyInfo
+		if err := rows.Scan(&k.KID, &k.Algorithm, &k.Active, &k.CreatedAt, &k.RetiredAt); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
