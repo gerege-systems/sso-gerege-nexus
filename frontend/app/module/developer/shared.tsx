@@ -11,6 +11,8 @@ import { useState } from "react";
 import { AlertTriangle, Check, Copy, KeyRound, Loader2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
+export { useAccess, ReadOnlyNote } from "@/lib/permissions";
+
 export function Screen({ icon, title, subtitle, action, children }: {
   icon: React.ReactNode; title: string; subtitle: string;
   action?: React.ReactNode; children: React.ReactNode;
@@ -192,3 +194,5 @@ export function relativeDate(value: string | undefined, fallback: string, locale
   if (Math.abs(days) < 1) return rtf.format(Math.round((then - Date.now()) / 3_600_000), "hour");
   return rtf.format(days, "day");
 }
+
+

@@ -15,12 +15,15 @@ import { api, type OAuth2Client, type OAuth2Scope } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
   Chip, ConfirmDialog, CopyButton, Empty, ErrorNote, Loading, Modal, Panel,
-  Screen, SecretDialog, relativeDate, useCopy,
+  ReadOnlyNote, Screen, SecretDialog, relativeDate, useAccess, useCopy,
 } from "../shared";
 
 export default function ApiKeysPage() {
   const { t, locale } = useI18n();
   const { copied, copy } = useCopy();
+  // Every mutation below maps to developer.manage in the gate middleware, so
+  // the screen asks the same question before offering the control.
+  const { allowed: canManage } = useAccess("developer.manage");
   const [clients, setClients] = useState<OAuth2Client[]>([]);
   const [scopes, setScopes] = useState<OAuth2Scope[]>([]);
   const [endpoints, setEndpoints] = useState<Record<string, string>>({});
@@ -100,19 +103,20 @@ export default function ApiKeysPage() {
       icon={<KeyRound className="w-5 h-5" />}
       title={t("developer.keys.title")}
       subtitle={t("developer.keys.subtitle")}
-      action={
+      action={canManage && (
         <button
           onClick={() => setCreating(true)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm"
         >
           <Plus className="w-4 h-4" /> {t("developer.keys.create")}
         </button>
-      }
+      )}
     >
       <Panel className="p-4 bg-slate-50 border-slate-200">
         <p className="text-xs text-slate-600 leading-relaxed">{t("developer.keys.explainer")}</p>
       </Panel>
 
+      {!canManage && <ReadOnlyNote permission="developer.manage" />}
       {error && <ErrorNote>{error}</ErrorNote>}
 
       {loading ? (
@@ -138,7 +142,7 @@ export default function ApiKeysPage() {
                     {relativeDate(key.last_used_at, t("developer.message.never_used"), locale)}
                   </p>
                 </div>
-                <div className="flex gap-1">
+                <div className={`flex gap-1 ${canManage ? "" : "hidden"}`}>
                   <button
                     onClick={() => setConfirming({ client: key, action: "rotate" })}
                     className="text-xs font-semibold text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
