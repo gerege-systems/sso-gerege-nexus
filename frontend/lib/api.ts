@@ -393,10 +393,85 @@ export const api = {
   },
 
   // Developer Portal & OAuth2 SSO Apps
-  getDeveloperApps: () => fetcher<any[]>("/developer/apps"),
-  createDeveloperApp: (clientName: string, redirectURIs: string[], scopes?: string[]) =>
-    fetcher<any>("/developer/apps", {
-      method: "POST",
-      body: JSON.stringify({ client_name: clientName, redirect_uris: redirectURIs, scopes }),
+  //
+  // client_secret comes back only from create and rotate-secret; every other
+  // read omits it, because the server keeps a digest and cannot reproduce it.
+  getDeveloperApps: () => fetcher<OAuth2Client[]>("/developer/apps"),
+  getDeveloperApp: (clientID: string) =>
+    fetcher<OAuth2Client>(`/developer/apps/${encodeURIComponent(clientID)}`),
+  createDeveloperApp: (app: OAuth2ClientDraft) =>
+    fetcher<OAuth2Client>("/developer/apps", { method: "POST", body: JSON.stringify(app) }),
+  updateDeveloperApp: (clientID: string, app: OAuth2ClientDraft) =>
+    fetcher<OAuth2Client>(`/developer/apps/${encodeURIComponent(clientID)}`, {
+      method: "PUT",
+      body: JSON.stringify(app),
     }),
+  deleteDeveloperApp: (clientID: string) =>
+    fetcher<void>(`/developer/apps/${encodeURIComponent(clientID)}`, { method: "DELETE" }),
+  rotateDeveloperAppSecret: (clientID: string) =>
+    fetcher<OAuth2Client>(`/developer/apps/${encodeURIComponent(clientID)}/rotate-secret`, {
+      method: "POST",
+    }),
+  getDeveloperScopes: () =>
+    fetcher<{ scopes: OAuth2Scope[]; grant_types: string[] }>("/developer/scopes"),
+  getDeveloperEndpoints: () => fetcher<Record<string, string>>("/developer/endpoints"),
+
+  // OAuth2 consent screen. The query string is the authorization request the
+  // browser arrived with; the server re-validates all of it rather than
+  // trusting what the page echoes back.
+  getConsentPrompt: (query: string) => fetcher<ConsentPrompt>(`/oauth2/consent?${query}`),
+  decideConsent: (query: string, approved: boolean) => {
+    const form = new URLSearchParams(query);
+    form.set("approved", String(approved));
+    return fetcher<{ redirect_to: string }>("/oauth2/consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+  },
+};
+
+export type OAuth2Scope = {
+  name: string;
+  description: string;
+  description_mn: string;
+  sensitive?: boolean;
+};
+
+export type OAuth2ClientDraft = {
+  client_name: string;
+  client_uri?: string;
+  client_type?: "confidential" | "public";
+  redirect_uris: string[];
+  grant_types: string[];
+  scopes: string[];
+  disabled?: boolean;
+};
+
+export type OAuth2Client = {
+  id: string;
+  client_id: string;
+  client_name: string;
+  client_uri?: string;
+  client_type: "confidential" | "public";
+  redirect_uris: string[];
+  grant_types: string[];
+  scopes: string[];
+  disabled: boolean;
+  created_at: string;
+  updated_at: string;
+  secret_rotated_at?: string;
+  last_used_at?: string;
+  /** Present only in the response that created or rotated it. */
+  client_secret?: string;
+};
+
+export type ConsentPrompt = {
+  client_id: string;
+  client_name: string;
+  client_uri?: string;
+  logo_uri?: string;
+  redirect_uri: string;
+  scopes: OAuth2Scope[];
+  already_granted: string[];
 };

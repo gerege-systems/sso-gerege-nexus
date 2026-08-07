@@ -155,7 +155,7 @@ func NewServer(db *pgxpool.Pool, catalogPath string) (*Server, error) {
 	syncMailer := mailer.NewSyncOTPMailer(os.Getenv("SMTP_HOST"), os.Getenv("SMTP_PORT"), os.Getenv("SMTP_FROM"), os.Getenv("SMTP_PASSWORD"))
 	asyncMailer := mailer.NewAsyncOTPMailer(syncMailer, 2, 64, 3)
 
-	ssoProvider := ssoprovider.NewSSOProvider()
+	ssoProvider := ssoprovider.NewSSOProvider(db)
 	devPortalMod := developer_portal.NewDeveloperPortalModule(ssoProvider)
 
 	s := &Server{
@@ -184,6 +184,21 @@ func NewServer(db *pgxpool.Pool, catalogPath string) (*Server, error) {
 		inventoryMod:   inventoryMod,
 		esignMod:       esignMod,
 	}
+
+	// The authorization endpoint has to know who is signing in, which is the
+	// platform session rather than anything OAuth owns.
+	ssoProvider.AttachSessions(s.sessions)
+
+	// Clients live in Postgres now, so the built-in one is registered once
+	// rather than rebuilt into a map on every boot. A cold database must not
+	// stop the process from starting: /ready reports that separately.
+	ssoCtx, cancelSSO := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelSSO()
+	ssoProvider.EnsureDefaultClient(ssoCtx)
+
+	// Spent codes and dead tokens are reclaimed on a timer. The in-memory
+	// token map this replaced had no eviction at all — it only ever grew.
+	ssoProvider.StartJanitor(context.Background(), 15*time.Minute)
 
 	s.setupRoutes()
 	return s, nil
@@ -225,12 +240,22 @@ func (s *Server) setupRoutes() {
 	// Prometheus Metrics Endpoint
 	r.Handle("/metrics", observability.MetricsHandler())
 
-	// ORY Hydra Grade OpenID Connect & OAuth2 Provider Endpoints
+	// OpenID Connect Provider & OAuth2 Authorization Server.
+	//
+	// These sit at the root rather than under /api/, which is where the
+	// specification puts them and what SSO_ISSUER advertises — the reverse
+	// proxy has to route them to this service explicitly.
 	r.Get("/.well-known/openid-configuration", s.ssoProvider.HandleOIDCDiscovery)
 	r.Get("/.well-known/jwks.json", s.ssoProvider.HandleJWKS)
+	// The authorization endpoint is a browser destination: it reads the
+	// session cookie itself and answers with redirects, so it must not sit
+	// behind the API's bearer-token middleware.
+	r.Get("/oauth2/auth", s.ssoProvider.HandleAuthorize)
 	r.Post("/oauth2/token", s.ssoProvider.HandleTokenEndpoint)
-	r.Post("/oauth2/introspect", s.ssoProvider.HandleIntrospectEndpoint)
-	r.Post("/oauth2/revoke", s.ssoProvider.HandleRevokeEndpoint)
+	r.Post("/oauth2/introspect", s.ssoProvider.HandleIntrospect)
+	r.Post("/oauth2/revoke", s.ssoProvider.HandleRevoke)
+	r.Get("/oauth2/userinfo", s.ssoProvider.HandleUserInfo)
+	r.Post("/oauth2/userinfo", s.ssoProvider.HandleUserInfo)
 
 	// Platform API
 	r.Route("/api/v1", func(api chi.Router) {
@@ -252,6 +277,13 @@ func (s *Server) setupRoutes() {
 
 			pr.Get("/auth/me", s.handleMe)
 			pr.Get("/menus", s.handleMenus)
+
+			// Consent screen. The browser endpoint at /oauth2/auth redirects
+			// here; these two describe the pending grant and record the
+			// answer. Both re-validate the request against the database, so
+			// the frontend is a renderer rather than a source of truth.
+			pr.Get("/oauth2/consent", s.ssoProvider.HandleConsentPrompt)
+			pr.Post("/oauth2/consent", s.ssoProvider.HandleConsentDecision)
 
 			// Tenant access control. Mutations are deliberately admin-only;
 			// authorization configuration can otherwise be used to self-elevate.

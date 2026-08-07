@@ -1,7 +1,7 @@
 {
   "id": "io.example.developer_portal",
   "name": "Developer Portal & OAuth2 SSO",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "platform": ">=0.1.0 <2.0.0",
   "dependencies": [],
   "permissions": [
@@ -13,7 +13,7 @@
     {
       "code": "developer.manage",
       "name": "Manage Developer Apps",
-      "description": "Allows registering and configuring OAuth2 client applications"
+      "description": "Allows registering, configuring, rotating secrets for and revoking OAuth2 client applications"
     }
   ],
   "menus": [
