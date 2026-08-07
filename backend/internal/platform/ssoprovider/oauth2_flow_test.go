@@ -130,8 +130,11 @@ func newFixture(t *testing.T, opts ...func(*Client)) *fixture {
 	}
 }
 
-// authorize drives the browser endpoint and returns the Location header.
-func (f *fixture) authorize(t *testing.T, extra url.Values) *http.Response {
+// authorize drives the browser endpoint and returns its status and Location.
+//
+// Not the *http.Response: every caller wants those two fields, and handing back
+// a response nobody closes is what bodyclose exists to catch.
+func (f *fixture) authorize(t *testing.T, extra url.Values) (int, string) {
 	t.Helper()
 	q := url.Values{
 		"response_type":         {"code"},
@@ -150,7 +153,7 @@ func (f *fixture) authorize(t *testing.T, extra url.Values) *http.Response {
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: "test-session"})
 	rec := httptest.NewRecorder()
 	f.provider.HandleAuthorize(rec, req)
-	return rec.Result()
+	return rec.Code, rec.Header().Get("Location")
 }
 
 // consent approves the pending grant, as the consent screen would.
@@ -166,11 +169,11 @@ func (f *fixture) consent(t *testing.T) {
 func (f *fixture) codeFromRedirect(t *testing.T) string {
 	t.Helper()
 	f.consent(t)
-	resp := f.authorize(t, nil)
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("expected a redirect, got %d", resp.StatusCode)
+	status, redirect := f.authorize(t, nil)
+	if status != http.StatusFound {
+		t.Fatalf("expected a redirect, got %d", status)
 	}
-	location, err := url.Parse(resp.Header.Get("Location"))
+	location, err := url.Parse(redirect)
 	if err != nil {
 		t.Fatalf("parse redirect: %v", err)
 	}
@@ -412,19 +415,19 @@ func TestPKCEAndRedirectBindingAreEnforced(t *testing.T) {
 
 	t.Run("an unregistered redirect_uri never reaches a redirect", func(t *testing.T) {
 		f := newFixture(t)
-		resp := f.authorize(t, url.Values{"redirect_uri": {"https://attacker.test/steal"}})
-		if resp.StatusCode == http.StatusFound {
-			t.Fatalf("the endpoint redirected to an unregistered URI: %s", resp.Header.Get("Location"))
+		status, redirect := f.authorize(t, url.Values{"redirect_uri": {"https://attacker.test/steal"}})
+		if status == http.StatusFound {
+			t.Fatalf("the endpoint redirected to an unregistered URI: %s", redirect)
 		}
 	})
 
 	t.Run("PKCE is mandatory", func(t *testing.T) {
 		f := newFixture(t)
 		f.consent(t)
-		resp := f.authorize(t, url.Values{"code_challenge": {""}})
-		location, _ := url.Parse(resp.Header.Get("Location"))
+		_, redirect := f.authorize(t, url.Values{"code_challenge": {""}})
+		location, _ := url.Parse(redirect)
 		if location.Query().Get("error") != "invalid_request" {
-			t.Errorf("a request without a code_challenge was not refused: %s", resp.Header.Get("Location"))
+			t.Errorf("a request without a code_challenge was not refused: %s", redirect)
 		}
 	})
 }
@@ -432,18 +435,17 @@ func TestPKCEAndRedirectBindingAreEnforced(t *testing.T) {
 func TestConsentIsRequiredBeforeACodeIsIssued(t *testing.T) {
 	f := newFixture(t)
 
-	resp := f.authorize(t, nil)
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("expected a redirect, got %d", resp.StatusCode)
+	status, location := f.authorize(t, nil)
+	if status != http.StatusFound {
+		t.Fatalf("expected a redirect, got %d", status)
 	}
-	location := resp.Header.Get("Location")
 	if !strings.Contains(location, "/oauth/consent") {
 		t.Fatalf("expected a bounce to the consent screen, got %s", location)
 	}
 
 	// prompt=none must not silently consent on the user's behalf.
-	resp = f.authorize(t, url.Values{"prompt": {"none"}})
-	parsed, _ := url.Parse(resp.Header.Get("Location"))
+	_, denied := f.authorize(t, url.Values{"prompt": {"none"}})
+	parsed, _ := url.Parse(denied)
 	if parsed.Query().Get("error") != "consent_required" {
 		t.Errorf("prompt=none without consent returned %q", parsed.Query().Get("error"))
 	}
