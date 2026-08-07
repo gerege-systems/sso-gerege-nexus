@@ -204,7 +204,9 @@ crea únicamente cuando se establece `SEED_DEMO_DATA=true` de forma explícita.
 
 ## Despliegue automatizado
 
-Cada push a `main` ejecuta [`deploy.yml`](../.github/workflows/deploy.yml):
+Una ejecución exitosa de [`ci.yml`](../.github/workflows/ci.yml) en `main`
+dispara [`deploy.yml`](../.github/workflows/deploy.yml) — no el push en sí, de
+modo que un commit cuyas pruebas fallaron nunca se despliega:
 
 1. Construir y publicar las imágenes de backend y frontend en GHCR (`:latest` y `:<sha>`).
 2. Copiar `docker-compose.prod.yml` al servidor.
@@ -223,14 +225,17 @@ Secretos requeridos en el repositorio:
 | `DEPLOY_SSH_KEY` | Sí | Clave privada del usuario de despliegue. Sin ella se omite el despliegue |
 | `POSTGRES_PASSWORD` | Sí | Contraseña de la base de datos en el servidor |
 | `SSO_DEFAULT_CLIENT_SECRET` | Sí | Obligatorio para el cliente OAuth2 integrado en producción |
-| `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` | No | Por defecto `nexus.gerege.mn` / `deploy` / `22` |
-| `PUBLIC_ORIGIN` | No | Por defecto `https://nexus.gerege.mn` |
+| `DEPLOY_HOST` | **Sí** | Sin valor por defecto |
+| `PUBLIC_ORIGIN` (variable de repositorio) | **Sí** | Sin valor por defecto |
+| `DEPLOY_USER` / `DEPLOY_PORT` | No | Por defecto `deploy` / `22` |
 
-> El dominio de producción es `nexus.gerege.mn`, que sustituyó a
-> `openerp.gerege.mn` en el cambio de nombre a Gerege Nexus. `PUBLIC_ORIGIN`
-> define en un mismo lugar el CORS, el emisor OIDC y el callback de eID, de modo
-> que moverlo arrastra consigo el DNS, el certificado TLS y todo cliente que
-> haya fijado el emisor.
+> Este repositorio es un fork de `open-gerege-nexus` y **comparte servidor** con
+> él: este responde en `sso.gerege.mn` y su vecino en `nexus.gerege.mn`. Por eso
+> `DEPLOY_HOST` y `PUBLIC_ORIGIN` **no tienen valor por defecto**: un secreto
+> olvidado detiene el flujo de trabajo en lugar de desplegar este repositorio
+> sobre la producción del vecino. `PUBLIC_ORIGIN` define en un mismo lugar el
+> CORS, el emisor OIDC y el callback de eID, de modo que moverlo arrastra
+> consigo el DNS, el certificado TLS y todo cliente que haya fijado el emisor.
 
 El servidor solo necesita Docker — sin código fuente ni cadena de herramientas
 Go/Node. Consulte [`deploy/.env.prod.example`](../deploy/.env.prod.example) para

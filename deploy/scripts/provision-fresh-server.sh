@@ -18,6 +18,14 @@ DEPLOY_USER="${DEPLOY_USER:-deploy}"
 # deploy.yml hardcodes this path (APP_DIR=/opt/sso-gerege-mn-erp in the rollout
 # script and as the scp target), so overriding it here only makes sense
 # alongside an edit there.
+#
+# It keeps the pre-rename spelling on purpose, though the repository is now
+# sso-gerege-nexus. Compose derives its project name from this directory and
+# scopes the Postgres volume with it, so renaming the directory points the stack
+# at a volume that does not exist: initdb runs, migrations apply, and the result
+# is a healthy container over an empty database. Moving it is a data migration —
+# stop the stack, copy the volume, repoint both this and deploy.yml — not a
+# tidy-up.
 APP_DIR="${APP_DIR:-/opt/sso-gerege-mn-erp}"
 DOMAIN="${DOMAIN:-sso.gerege.mn}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-admin@gerege.mn}"
@@ -109,7 +117,7 @@ else
   exit 1
 fi
 ln -sfn "$SITE_DEST" "/etc/nginx/sites-enabled/${DOMAIN}"
-# Only the stock Debian placeholder. This host also serves openerp.gerege.mn,
+# Only the stock Debian placeholder. This host also serves nexus.gerege.mn,
 # and removing a `default` symlink that points at a real site would take that
 # deployment offline.
 if [ "$(readlink -f /etc/nginx/sites-enabled/default 2>/dev/null || true)" = "/etc/nginx/sites-available/default" ]; then
@@ -151,11 +159,11 @@ cat <<EOF
 
   1. Point the DNS A record for ${DOMAIN} at this host, if not already.
   2. Update the DEPLOY_HOST repository secret to this host's IP:
-       gh secret set DEPLOY_HOST -R gerege-systems/sso-gerege-mn-erp
+       gh secret set DEPLOY_HOST -R gerege-systems/sso-gerege-nexus
   3. Confirm DEPLOY_USER matches "${DEPLOY_USER}", DEPLOY_PORT matches
      ${SSH_PORT}, and DEPLOY_SSH_KEY holds the private half of the key
      installed above.
   4. Run the deploy workflow:
-       gh workflow run deploy.yml -R gerege-systems/sso-gerege-mn-erp --ref main
+       gh workflow run deploy.yml -R gerege-systems/sso-gerege-nexus --ref main
 
 EOF

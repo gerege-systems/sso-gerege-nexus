@@ -205,7 +205,9 @@ only when `SEED_DEMO_DATA=true` is set explicitly.
 
 ## Automated deployment
 
-Every push to `main` runs [`deploy.yml`](../.github/workflows/deploy.yml):
+A successful [`ci.yml`](../.github/workflows/ci.yml) run on `main` triggers
+[`deploy.yml`](../.github/workflows/deploy.yml) — not the push itself, so a
+commit whose tests failed is never rolled out:
 
 1. Build and push the backend and frontend images to GHCR (`:latest` and `:<sha>`).
 2. Copy `docker-compose.prod.yml` to the server.
@@ -224,13 +226,17 @@ Required repository secrets:
 | `DEPLOY_SSH_KEY` | Yes | Private key of the deploy user. Without it the rollout is skipped |
 | `POSTGRES_PASSWORD` | Yes | Database password on the server |
 | `SSO_DEFAULT_CLIENT_SECRET` | Yes | Mandatory for the built-in OAuth2 client in production |
-| `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` | No | Default to `nexus.gerege.mn` / `deploy` / `22` |
-| `PUBLIC_ORIGIN` | No | Defaults to `https://nexus.gerege.mn` |
+| `DEPLOY_HOST` | **Yes** | No default |
+| `PUBLIC_ORIGIN` (repository variable) | **Yes** | No default |
+| `DEPLOY_USER` / `DEPLOY_PORT` | No | Default to `deploy` / `22` |
 
-> The production domain is `nexus.gerege.mn`, which replaced
-> `openerp.gerege.mn` in the Gerege Nexus rename. `PUBLIC_ORIGIN` defines CORS,
-> the OIDC issuer and the eID callback in one place, so moving it carries DNS,
-> the TLS certificate and every client that pinned the issuer along with it.
+> This repository is a fork of `open-gerege-nexus` and **shares a host** with
+> it: this one answers on `sso.gerege.mn`, its neighbour on `nexus.gerege.mn`.
+> That is why `DEPLOY_HOST` and `PUBLIC_ORIGIN` have **no defaults** — a
+> forgotten secret stops the workflow rather than rolling this repository out
+> over its neighbour's production. `PUBLIC_ORIGIN` defines CORS, the OIDC
+> issuer and the eID callback in one place, so moving it carries DNS, the TLS
+> certificate and every client that pinned the issuer along with it.
 
 The server needs Docker only — no source tree and no Go/Node toolchain. See
 [`deploy/.env.prod.example`](../deploy/.env.prod.example) for the values.

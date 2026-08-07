@@ -11,11 +11,12 @@ name: Deploy to Production (sso.gerege.mn)
 # should not happen. It is now chained to CI's completion and runs only on
 # success.
 #
-# This repository is a fork of open-gerege-mn-erp and shares a host with the
+# This repository is a fork of open-gerege-nexus and shares a host with the
 # deployment it was forked from. Nothing here may fall back to a default target.
-# Upstream defaulted DEPLOY_HOST and PUBLIC_ORIGIN to openerp.gerege.mn, so a
-# secret forgotten here would have rolled this repository out over its
-# neighbour's production instead of failing. Both are required now.
+# Upstream defaults DEPLOY_HOST and PUBLIC_ORIGIN to its own origin — first
+# openerp.gerege.mn, now nexus.gerege.mn — so a secret forgotten here would have
+# rolled this repository out over its neighbour's production instead of failing.
+# Both are required now.
 #
 # Required repository secrets:
 #   DEPLOY_SSH_KEY              private key for the deploy user (required)
@@ -130,7 +131,7 @@ jobs:
 
       # A clone with no deploy key is not configured to roll out at all, which is
       # fine — it skips. But a clone that has the key and is missing the target
-      # must stop, not guess: this host also serves openerp.gerege.mn, and the
+      # must stop, not guess: this host also serves nexus.gerege.mn, and the
       # defaults this workflow was forked with pointed there.
       - name: Check deployment secrets
         id: guard

@@ -238,7 +238,9 @@ npm run dev
 
 ## النشر الآلي
 
-كل دفع إلى `main` يُشغِّل [`deploy.yml`](../.github/workflows/deploy.yml):
+نجاح [`ci.yml`](../.github/workflows/ci.yml) على `main` هو ما يُشغِّل
+[`deploy.yml`](../.github/workflows/deploy.yml) — لا الدفع نفسه، فلا يُنشَر أبدًا
+إيداع فشلت اختباراته:
 
 ١. بناء صور الواجهة الخلفية والأمامية ورفعها إلى GHCR (`:latest` و `:<sha>`).
 
@@ -263,15 +265,18 @@ npm run dev
 | `DEPLOY_SSH_KEY` | نعم | المفتاح الخاص لمستخدم النشر. بدونه يُتخطَّى النشر |
 | `POSTGRES_PASSWORD` | نعم | كلمة مرور قاعدة البيانات على الخادم |
 | `SSO_DEFAULT_CLIENT_SECRET` | نعم | إلزامي لعميل OAuth2 المدمج في الإنتاج |
-| `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` | لا | الافتراضي `nexus.gerege.mn` / `deploy` / `22` |
-| `PUBLIC_ORIGIN` | لا | الافتراضي `https://nexus.gerege.mn` |
+| `DEPLOY_HOST` | **نعم** | لا قيمة افتراضية |
+| `PUBLIC_ORIGIN` (متغيِّر مستودع) | **نعم** | لا قيمة افتراضية |
+| `DEPLOY_USER` / `DEPLOY_PORT` | لا | الافتراضي `deploy` / `22` |
 
 <div dir="rtl">
 
-> نطاق الإنتاج هو `nexus.gerege.mn`، الذي حلَّ محل `openerp.gerege.mn` عند
-> إعادة التسمية إلى Gerege Nexus. يحدِّد `PUBLIC_ORIGIN` في موضع واحد سياسة
-> CORS ومُصدِر OIDC وعنوان استدعاء eID، لذا فإن تغييره يستتبع معه DNS وشهادة
-> TLS وكل عميل ثبَّت المُصدِر لديه.
+> هذا المستودع نسخة متفرِّعة من `open-gerege-nexus` و**يتشارك معه الخادم
+> نفسه**: هذا يستجيب على `sso.gerege.mn` وجاره على `nexus.gerege.mn`. لذلك لا
+> توجد قيمة افتراضية لـ `DEPLOY_HOST` ولا لـ `PUBLIC_ORIGIN` — فالسر المنسي
+> يوقف سير العمل بدل أن ينشر هذا المستودع فوق إنتاج جاره. يحدِّد
+> `PUBLIC_ORIGIN` في موضع واحد سياسة CORS ومُصدِر OIDC وعنوان استدعاء eID، لذا
+> فإن تغييره يستتبع معه DNS وشهادة TLS وكل عميل ثبَّت المُصدِر لديه.
 
 لا يحتاج الخادم سوى Docker — دون شيفرة مصدرية ودون أدوات Go/Node. راجع
 [`deploy/.env.prod.example`](../deploy/.env.prod.example) للاطلاع على القيم.
