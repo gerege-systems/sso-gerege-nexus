@@ -142,12 +142,9 @@ async function main() {
 
   const translated = {};
   let rejected = 0;
-  const SIZE = 40;
-  for (let i = 0; i < pending.length; i += SIZE) {
-    const slice = pending.slice(i, i + SIZE);
-    const batch = Object.fromEntries(slice.map(([k, v]) => [k, { mn: v.mn, en: v.en }]));
-    process.stdout.write(`  batch ${Math.floor(i / SIZE) + 1}/${Math.ceil(pending.length / SIZE)}… `);
-    const answer = await callGemini(batch, locale);
+  let failed = 0;
+
+  const accept = (answer) => {
     let ok = 0;
     for (const [key, value] of Object.entries(answer)) {
       const source = dictionary[key];
@@ -158,7 +155,36 @@ async function main() {
       translated[key] = value.trim();
       ok++;
     }
-    console.log(`${ok} ok`);
+    return ok;
+  };
+
+  /**
+   * One batch, with the model's failure modes absorbed rather than fatal.
+   *
+   * A long batch can come back truncated, which reads as invalid JSON. Halving
+   * it and retrying recovers almost every case, and a batch that still fails is
+   * skipped instead of discarding the whole run — losing 40 strings is an
+   * annoyance, losing 680 already-paid-for translations is not.
+   */
+  const run = async (slice, depth = 0) => {
+    const batch = Object.fromEntries(slice.map(([k, v]) => [k, { mn: v.mn, en: v.en }]));
+    try {
+      return accept(await callGemini(batch, locale));
+    } catch (err) {
+      if (slice.length > 1 && depth < 3) {
+        const half = Math.ceil(slice.length / 2);
+        return (await run(slice.slice(0, half), depth + 1)) + (await run(slice.slice(half), depth + 1));
+      }
+      failed += slice.length;
+      console.warn(`\n    skipped ${slice.length}: ${String(err.message || err).slice(0, 120)}`);
+      return 0;
+    }
+  };
+
+  const SIZE = 40;
+  for (let i = 0; i < pending.length; i += SIZE) {
+    process.stdout.write(`  batch ${Math.floor(i / SIZE) + 1}/${Math.ceil(pending.length / SIZE)}… `);
+    console.log(`${await run(pending.slice(i, i + SIZE))} ok`);
   }
 
   const merged = { ...existing, ...translated };
@@ -167,7 +193,11 @@ async function main() {
   const header = await readFile(overlayFile, "utf8").then((s) => s.slice(0, s.indexOf("export const")));
   const out = `${header}export const ${locale}: Record<string, string> = {\n${body}\n};\n`;
 
-  console.log(`\n${Object.keys(translated).length} new, ${rejected} rejected for placeholder drift, ${keys.length} total`);
+  console.log(
+    `\n${Object.keys(translated).length} new, ${rejected} rejected for placeholder drift` +
+      (failed ? `, ${failed} skipped after retries — re-run to pick them up` : "") +
+      `, ${keys.length} total`,
+  );
   if (!write) {
     console.log(`\nDry run. Re-run with --write to update ${path.relative(process.cwd(), overlayFile)}`);
     return;

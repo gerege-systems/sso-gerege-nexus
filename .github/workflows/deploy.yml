@@ -1,7 +1,15 @@
 name: Deploy to Production (sso.gerege.mn)
 
-# Lint, tests and builds live in ci.yml — this workflow publishes images for an
-# already-green commit and rolls them out.
+# Lint, tests and builds live in ci.yml. This workflow publishes images for an
+# already-green commit and rolls them out — and now actually waits for that to
+# be true.
+#
+# It used to trigger on push to main, which meant it raced CI rather than
+# following it: a merge started both at once and the rollout was usually done
+# before the tests finished. Two pull requests that are each green can still
+# break main together, and that is precisely the case where an automatic deploy
+# should not happen. It is now chained to CI's completion and runs only on
+# success.
 #
 # This repository is a fork of open-gerege-mn-erp and shares a host with the
 # deployment it was forked from. Nothing here may fall back to a default target.
@@ -27,7 +35,10 @@ name: Deploy to Production (sso.gerege.mn)
 #   PUBLIC_ORIGIN               required — no default
 #   DEMO_MODE                   "true" seeds the demo account and mock connectors
 on:
-  push:
+  workflow_run:
+    # Must match ci.yml's `name:` exactly.
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -62,6 +73,7 @@ jobs:
   build-and-push:
     name: Build & push ${{ matrix.component }} image
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     strategy:
       matrix:
         include:
@@ -73,6 +85,8 @@ jobs:
             dockerfile: Dockerfile
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -97,7 +111,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.meta.outputs.image }}:latest
-            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:${{ github.event.workflow_run.head_sha || github.sha }}
           # NEXT_PUBLIC_* is inlined into the client bundle at build time, so
           # the production API URL has to be known here, not at run time.
           build-args: |
@@ -111,6 +125,8 @@ jobs:
     needs: [build-and-push]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # A clone with no deploy key is not configured to roll out at all, which is
       # fine — it skips. But a clone that has the key and is missing the target
@@ -135,7 +151,7 @@ jobs:
 
       - name: Resolve image tag
         id: tag
-        run: echo "value=${{ github.event.inputs.tag || github.sha }}" >> "$GITHUB_OUTPUT"
+        run: echo "value=${{ github.event.inputs.tag || github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Copy compose file to the server
         if: steps.guard.outputs.ready == 'true'
