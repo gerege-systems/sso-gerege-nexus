@@ -140,20 +140,23 @@ services:
         condition: service_healthy
 
 volumes:
-  # The live database. Both lines below are deliberate.
+  # `name` pins the physical volume, decoupling the data from the deploy
+  # directory: Compose otherwise derives a volume name from the project, which
+  # comes from the directory, so moving the stack would silently bring Postgres
+  # up on an empty data directory — healthy container, initdb, migrations, no
+  # tenants. Pinning it is what makes that move safe.
   #
-  # The key keeps its pre-rebrand name: renaming it does not move data, it
-  # creates a second, empty volume and the stack comes up with no database.
-  # Container names above are safe to rename because Docker recreates
-  # containers on every rollout — a volume is not.
+  # The pin was `sso-gerege-mn-erp_sso_erp_postgres_data` until
+  # 2026-08-08, a name inherited from two rebrands ago. It was renamed to match
+  # the container names and the sibling stacks sharing this host
+  # (gerege_nexus_*, gerege_sso_*, gerege_salus_*), so that three products no
+  # longer carry three unrelated naming schemes for the same kind of thing.
   #
-  # `name:` pins the real volume. Without it Compose derives the name from the
-  # project, and the project name comes from the deploy directory — so moving
-  # /opt/sso-gerege-mn-erp to /opt/sso-gerege-nexus would have silently pointed
-  # a healthy-looking stack at a brand-new empty volume. Pinning it decouples
-  # the data from the directory name, which is what makes that move safe.
-  #
-  # This must match the volume that already exists on the host. Verify with
-  # `docker volume ls | grep postgres_data` before changing it.
+  # That rename was a data migration, not an edit: the stack was stopped, the
+  # data copied with
+  # `docker run --rm -v old:/from -v new:/to alpine cp -a /from/. /to/`, this
+  # field repointed, the stack restarted and row counts verified against a
+  # pg_dump taken first. The old volume was kept. Renaming it again costs the
+  # same steps — changing this line on its own gives you an empty database.
   sso_erp_postgres_data:
-    name: sso-gerege-mn-erp_sso_erp_postgres_data
+    name: gerege_sso_platform_postgres_data
