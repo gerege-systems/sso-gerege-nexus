@@ -15,4 +15,11 @@ export const billing = {
   "billing.action.create": { mn: "Нэхэмжлэх үүсгэх", en: "Create Invoice" },
 
   "billing.message.loading": { mn: "Нэхэмжлэхүүдийг ачаалж байна...", en: "Loading invoices..." },
+
+  "billing.field.invoice_number": { mn: "Нэхэмжлэхийн дугаар", en: "Invoice #" },
+  "billing.field.amount": { mn: "Нэхэмжлэхийн дүн (₮)", en: "Invoice Amount (₮)" },
+
+  "billing.action.generate": { mn: "Нэхэмжлэх үүсгэх", en: "Generate Invoice" },
+
+  "billing.message.create_failed": { mn: "Нэхэмжлэх үүсгэж чадсангүй", en: "Failed to create invoice" },
 } as const;

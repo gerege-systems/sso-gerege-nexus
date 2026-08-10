@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect,useMemo,useState} from "react";
+import { useLoadOnMount } from "@/lib/useResource";
 import {api} from "@/lib/api";
 import {useI18n} from "@/lib/i18n";
 import {Check,Plus,Save,ShieldCheck,Trash2,Users} from "lucide-react";
@@ -18,8 +19,12 @@ export default function AccessSettingsPage(){
   const grouped=useMemo(()=>Object.entries(permissions.reduce<Record<string,Permission[]>>((all,p)=>{(all[p.app]??=[]).push(p);return all},{})),[permissions]);
 
   async function load(){setLoading(true);setError("");try{const data=await api.getAccessOverview();setRoles(data.roles);setPermissions(data.permissions);setMembers(data.members);setSelected(cur=>cur&&data.roles.some(r=>r.id===cur)?cur:(data.roles.find(r=>r.code==="manager")||data.roles[0])?.id||"")}catch(e){setError(e instanceof Error?e.message:t("access.message.error_load"))}finally{setLoading(false)}}
-  useEffect(()=>{void load()},[]);
-  useEffect(()=>{setDraft(current?.permissions||[])},[selected,current?.permissions.join("|")]);
+  useLoadOnMount(load);
+  // Joined into one string so the dependency is a value the rule can check, and so
+  // the draft is rebuilt when the role's permissions actually change rather than
+  // whenever the array is rebuilt with the same contents.
+  const currentPermissions=current?.permissions.join("|");
+  useEffect(()=>{setDraft(currentPermissions?currentPermissions.split("|"):[])},[selected,currentPermissions]);
 
   function flash(message:string){setNotice(message);setTimeout(()=>setNotice(""),2500)}
   function togglePermission(code:string){if(current?.code==="admin")return;setDraft(v=>v.includes(code)?v.filter(x=>x!==code):[...v,code])}

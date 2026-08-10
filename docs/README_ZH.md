@@ -97,6 +97,10 @@
 - **内置 OAuth2 / OIDC 提供方**
   （`/.well-known/openid-configuration`），为第三方系统签发 client credentials
   令牌。
+- **电子邮件验证**（`platform/emailverify`）——统一的地址验证流程，平台内所有应用
+  模块在进程内直接调用。邮件由托管服务（`enigma.mn`）发送，因此平台不保存任何
+  邮箱凭据、也不拥有发件地址；用户回到平台时记录验证，且该回访仅可使用一次。可在
+  “设置 → 电子邮件验证”中查看。
 
 > **注意。** E-ID、DAN 与 XYP 的 mock 模式仅用于开发环境。当
 > `ENVIRONMENT=production` 时会自动关闭，伪造的登记号无法完成认证。
@@ -224,6 +228,9 @@ npm run dev
 | `GET` | `/api/v1/menus` | 租户已启用应用的菜单 |
 | `GET` | `/api/v1/store/apps` | 应用商店列表 |
 | `POST` | `/api/v1/store/apps/{slug}/install` | 安装应用（管理员） |
+| `POST` | `/api/v1/verify/send` | 向托管服务申请电子邮件验证链接 |
+| `GET` | `/api/v1/verify/landed` | 接收已确认地址的用户——仅可使用一次 |
+| `GET` | `/api/v1/admin/email-verification/overview` | 验证记录与服务状态（管理员） |
 | `POST` | `/oauth2/token` | OAuth2 client credentials 令牌 |
 
 会话令牌通过 HttpOnly Cookie 或 `Authorization: Bearer <token>` 传递。

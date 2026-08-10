@@ -9,6 +9,7 @@ import (
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -75,7 +76,7 @@ func (m *Module) Permissions() []internal.PermissionDefinition {
 
 func (m *Module) Menus() []internal.MenuDefinition {
 	return []internal.MenuDefinition{
-		{ID: "inventory", ParentID: "operations", Label: "Inventory", Path: "/inventory", Icon: "boxes", Order: 10, Labels: map[string]string{"mn": "Агуулах"}},
+		{ID: "inventory", ParentID: "operations", Label: "Inventory", Path: "/inventory", Icon: "boxes", Order: 10, Labels: map[string]string{"mn": "Агуулах", "ar": "المخزون", "zh": "库存", "fr": "Inventaire", "ru": "Склад", "es": "Inventario"}},
 	}
 }
 
@@ -91,16 +92,15 @@ func (m *Module) RegisterRoutes(r chi.Router, tenantAuthMiddleware func(http.Han
 }
 
 func (m *Module) listWarehousesHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	rows, err := m.db.Query(r.Context(),
 		`SELECT id, tenant_id, code, name, address, created_at FROM warehouses WHERE tenant_id = $1 ORDER BY name ASC`, tenantID)
 	if err != nil {
-		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "database error")
 		return
 	}
 	defer rows.Close()
@@ -109,10 +109,16 @@ func (m *Module) listWarehousesHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var wh Warehouse
 		if err := rows.Scan(&wh.ID, &wh.TenantID, &wh.Code, &wh.Name, &wh.Address, &wh.CreatedAt); err != nil {
-			http.Error(w, `{"error":"scan error"}`, http.StatusInternalServerError)
+			httpx.Error(w, http.StatusInternalServerError, "scan error")
 			return
 		}
 		list = append(list, wh)
+	}
+	// A broken stream ends the loop exactly like a complete one; without this
+	// a truncated list goes out under a 200.
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "scan error")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -122,7 +128,7 @@ func (m *Module) listWarehousesHandler(w http.ResponseWriter, r *http.Request) {
 func (m *Module) createWarehouseHandler(w http.ResponseWriter, r *http.Request) {
 	claims, err := auth.UserFromContext(r.Context())
 	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -132,7 +138,7 @@ func (m *Module) createWarehouseHandler(w http.ResponseWriter, r *http.Request) 
 		Address string `json:"address"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" || req.Name == "" {
-		http.Error(w, `{"error":"invalid warehouse payload, code and name required"}`, http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid warehouse payload, code and name required")
 		return
 	}
 
@@ -144,7 +150,7 @@ func (m *Module) createWarehouseHandler(w http.ResponseWriter, r *http.Request) 
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		id, claims.TenantID, req.Code, req.Name, req.Address, now)
 	if err != nil {
-		http.Error(w, `{"error":"warehouse code already exists or DB error"}`, http.StatusConflict)
+		httpx.Error(w, http.StatusConflict, "warehouse code already exists or DB error")
 		return
 	}
 
@@ -163,16 +169,15 @@ func (m *Module) createWarehouseHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (m *Module) listStockLevelsHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	rows, err := m.db.Query(r.Context(),
 		`SELECT id, tenant_id, warehouse_id, product_id, quantity, updated_at FROM stock_levels WHERE tenant_id = $1`, tenantID)
 	if err != nil {
-		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "database error")
 		return
 	}
 	defer rows.Close()
@@ -181,10 +186,16 @@ func (m *Module) listStockLevelsHandler(w http.ResponseWriter, r *http.Request) 
 	for rows.Next() {
 		var sl StockLevel
 		if err := rows.Scan(&sl.ID, &sl.TenantID, &sl.WarehouseID, &sl.ProductID, &sl.Quantity, &sl.UpdatedAt); err != nil {
-			http.Error(w, `{"error":"scan error"}`, http.StatusInternalServerError)
+			httpx.Error(w, http.StatusInternalServerError, "scan error")
 			return
 		}
 		list = append(list, sl)
+	}
+	// Stock levels above all: a short list here reads as stock that is not
+	// there, and somebody reorders against it.
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "scan error")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -192,9 +203,8 @@ func (m *Module) listStockLevelsHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (m *Module) listStockMovementsHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -202,7 +212,7 @@ func (m *Module) listStockMovementsHandler(w http.ResponseWriter, r *http.Reques
 		`SELECT id, tenant_id, warehouse_id, product_id, quantity_change, reference, created_at 
 		 FROM stock_movements WHERE tenant_id = $1 ORDER BY created_at DESC`, tenantID)
 	if err != nil {
-		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "database error")
 		return
 	}
 	defer rows.Close()
@@ -211,10 +221,16 @@ func (m *Module) listStockMovementsHandler(w http.ResponseWriter, r *http.Reques
 	for rows.Next() {
 		var sm StockMovement
 		if err := rows.Scan(&sm.ID, &sm.TenantID, &sm.WarehouseID, &sm.ProductID, &sm.QuantityChange, &sm.Reference, &sm.CreatedAt); err != nil {
-			http.Error(w, `{"error":"scan error"}`, http.StatusInternalServerError)
+			httpx.Error(w, http.StatusInternalServerError, "scan error")
 			return
 		}
 		list = append(list, sm)
+	}
+	// The movement ledger is what a stock figure is reconciled against, so a
+	// silently short one is worse than an error.
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "scan error")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -224,7 +240,7 @@ func (m *Module) listStockMovementsHandler(w http.ResponseWriter, r *http.Reques
 func (m *Module) adjustStockHandler(w http.ResponseWriter, r *http.Request) {
 	claims, err := auth.UserFromContext(r.Context())
 	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -235,14 +251,14 @@ func (m *Module) adjustStockHandler(w http.ResponseWriter, r *http.Request) {
 		Reference      string  `json:"reference"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.WarehouseID == "" || req.ProductID == "" || req.QuantityChange == 0 {
-		http.Error(w, `{"error":"invalid adjustment payload"}`, http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid adjustment payload")
 		return
 	}
 
 	ctx := r.Context()
 	tx, err := m.db.Begin(ctx)
 	if err != nil {
-		http.Error(w, `{"error":"tx begin error"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "tx begin error")
 		return
 	}
 	defer func() {
@@ -257,13 +273,13 @@ func (m *Module) adjustStockHandler(w http.ResponseWriter, r *http.Request) {
 		claims.TenantID, req.WarehouseID, req.ProductID).Scan(&stockID, &currentQty)
 
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		http.Error(w, `{"error":"failed to fetch current stock"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch current stock")
 		return
 	}
 
 	newQty := currentQty + req.QuantityChange
 	if newQty < 0 && !m.allowNegativeStock {
-		http.Error(w, `{"error":"stock adjustment rejected: negative stock is not allowed"}`, http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "stock adjustment rejected: negative stock is not allowed")
 		return
 	}
 
@@ -281,7 +297,7 @@ func (m *Module) adjustStockHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, `{"error":"failed to update stock level"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "failed to update stock level")
 		return
 	}
 
@@ -292,12 +308,12 @@ func (m *Module) adjustStockHandler(w http.ResponseWriter, r *http.Request) {
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		movID, claims.TenantID, req.WarehouseID, req.ProductID, req.QuantityChange, req.Reference, now)
 	if err != nil {
-		http.Error(w, `{"error":"failed to record stock movement"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "failed to record stock movement")
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		http.Error(w, `{"error":"failed to commit stock adjustment"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "failed to commit stock adjustment")
 		return
 	}
 

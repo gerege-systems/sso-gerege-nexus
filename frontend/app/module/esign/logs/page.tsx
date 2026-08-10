@@ -4,15 +4,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Download, ScrollText, Search } from "lucide-react";
 import { esign, saveBlob, type LogFilter, type SignatureLogEntry } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
-import {
-  Banner,
-  EmptyState,
-  Loading,
-  OutcomeBadge,
-  PageHeader,
-  Pager,
-  useErrorMessage,
-} from "@/components/esign/shared";
+import { Banner, EmptyState, Loading, PageHeader, cardClass, tableHeadClass } from "@/components/ui";
+import { OutcomeBadge, Pager, useErrorMessage } from "@/components/esign/shared";
 
 const PAGE_SIZE = 50;
 
@@ -49,7 +42,7 @@ export default function EsignLogsPage() {
         setLoading(false);
       }
     },
-    [t],
+    [describe, t],
   );
 
   useEffect(() => {
@@ -181,14 +174,14 @@ export default function EsignLogsPage() {
         </div>
       </section>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+      <div className={`${cardClass} overflow-x-auto`}>
         {loading ? (
           <div className="p-6">
             <Loading />
           </div>
         ) : (
           <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
+            <thead className={tableHeadClass}>
               <tr>
                 <th className="px-4 py-3">{t("base.field.date")}</th>
                 <th className="px-4 py-3">{t("esign.field.action")}</th>

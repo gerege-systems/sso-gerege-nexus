@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { api } from "@/lib/api";
+import { useResource } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
-import { ActionMessage, Banner, SectionHeader } from "@/components/documents/shared";
+import { Banner, LoadingBlock, PageHeader, rowActionClass } from "@/components/ui";
+import { ActionMessage } from "@/components/documents/shared";
 import { Plus, Save, Trash2, Workflow as WorkflowIcon } from "lucide-react";
 
 interface Step {
@@ -28,32 +30,23 @@ export default function DocumentWorkflowsPage() {
   const { can } = useAccess();
   const mayManage = can("documents.manage");
 
-  const [chains, setChains] = useState<Chain[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<ActionMessage | null>(null);
 
   // The server answers with a row for every document type, so an empty list can only
-  // mean the load failed. Rendering the table anyway left a blank page that reads as
-  // "this tenant has no document types" the moment the error banner is dismissed.
-  const [loadFailed, setLoadFailed] = useState(false);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      setChains((await api.getDocumentWorkflows()) || []);
-      setLoadFailed(false);
-    } catch (err: any) {
-      setLoadFailed(true);
-      setMessage({ type: "error", text: err?.message || t("documents.message.workflows_failed") });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  // mean the load failed — hence `failed` below rather than an empty table. Rendering
+  // the table anyway left a blank page that reads as "this tenant has no document
+  // types" the moment the error banner is dismissed.
+  const {
+    data: chains,
+    loading,
+    failed: loadFailed,
+    setData: setChains,
+  } = useResource(async () => (await api.getDocumentWorkflows()) || [], {
+    initial: [] as Chain[],
+    onError: (err: any) =>
+      setMessage({ type: "error", text: err?.message || t("documents.message.workflows_failed") }),
+  });
 
   const editChain = (docType: string, steps: Step[]) =>
     setChains((current) => current.map((c) => (c.doc_type === docType ? { ...c, steps } : c)));
@@ -110,16 +103,16 @@ export default function DocumentWorkflowsPage() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader
+      <PageHeader
         icon={<WorkflowIcon className="w-7 h-7 text-indigo-600" />}
         title={t("documents.menu.workflows")}
         subtitle={t("documents.view.workflows_hint")}
       />
 
-      {message && <Banner message={message} onDismiss={() => setMessage(null)} />}
+      {message && <Banner tone={message.type} message={message.text} onDismiss={() => setMessage(null)} />}
 
       {loading ? (
-        <div className="py-12 text-center text-slate-400">{t("documents.message.loading")}</div>
+        <LoadingBlock label={t("documents.message.loading")} />
       ) : loadFailed ? (
         <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-sm">
           {t("documents.message.workflows_failed")}
@@ -150,7 +143,7 @@ export default function DocumentWorkflowsPage() {
                       onClick={() => save(chain)}
                       disabled={busy === chain.doc_type || chain.steps.some((s) => !s.name.trim())}
                       title={chain.steps.some((s) => !s.name.trim()) ? t("documents.message.step_needs_name") : undefined}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-indigo-200 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+                      className={rowActionClass}
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>{t("base.action.save")}</span>

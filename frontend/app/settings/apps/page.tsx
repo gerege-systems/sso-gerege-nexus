@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { Settings, ShieldCheck, Clock, Power, PowerOff } from "lucide-react";
+import { Settings, Clock } from "lucide-react";
 
 interface InstalledApp {
   id: string;
@@ -62,7 +62,7 @@ export default function InstalledAppsSettingsPage() {
           <span>{t("app_store.view.installed_title")}</span>
         </h1>
         <p className="text-sm text-slate-500">
-          Manage installed tenant modules, check operational status, and enable/disable features.
+          {t("app_store.view.installed_subtitle")}
         </p>
       </div>
 
@@ -70,11 +70,10 @@ export default function InstalledAppsSettingsPage() {
         <div className="py-8 text-slate-500 text-sm">{t("app_store.message.loading_installed")}</div>
       ) : apps.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-sm">
-          No apps installed for this tenant yet. Visit the{" "}
+          {t("app_store.message.none_installed")}{" "}
           <a href="/apps" className="text-indigo-600 font-semibold underline">
-            App Store
-          </a>{" "}
-          to install business modules.
+            {t("app_store.action.browse_store")}
+          </a>
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">

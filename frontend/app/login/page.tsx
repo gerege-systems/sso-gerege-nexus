@@ -5,12 +5,15 @@ import Link from "next/link";
 import EIDLogin from "@/components/EIDLogin";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import {api} from "@/lib/api";
+import {resetAccess} from "@/lib/access";
 import {useI18n} from "@/lib/i18n";
 import {ChevronDown,Lock,Mail} from "lucide-react";
 
 export default function LoginPage(){const router=useRouter();const {t}=useI18n();const [next,setNext]=useState("/apps"),[admin,setAdmin]=useState(false),[email,setEmail]=useState("admin@example.com"),[password,setPassword]=useState("Password123!"),[error,setError]=useState("");
   useEffect(()=>{const requested=new URLSearchParams(location.search).get("next");if(requested?.startsWith("/")&&!requested.startsWith("//"))setNext(requested)},[]);
-  async function passwordLogin(e:React.FormEvent){e.preventDefault();setError("");try{const res=await api.login(email,password);localStorage.setItem("session_token",res.token);
+  // resetAccess before the push: router.push is a client-side navigation, so
+  // whatever the previous session left cached would answer for this one.
+  async function passwordLogin(e:React.FormEvent){e.preventDefault();setError("");try{await api.login(email,password);resetAccess();
     // /oauth2/* belongs to the API, not to this Next app, so a client-side
     // push would 404 instead of resuming the authorization request. eID sign-in
     // already navigates for real; this path has to as well.

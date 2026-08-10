@@ -24,4 +24,15 @@ export const app_store = {
   "app_store.message.loading": { mn: "Апп каталог ачаалж байна...", en: "Loading apps catalog..." },
   "app_store.message.loading_installed": { mn: "Суулгасан аппуудыг ачаалж байна...", en: "Loading installed apps..." },
   "app_store.message.no_match": { mn: "Хайлтад тохирох апп олдсонгүй.", en: "No apps found matching your query." },
+
+  "app_store.view.installed_subtitle": { mn: "Суулгасан модулиудыг удирдаж, төлөвийг хянаж, идэвхжүүлэх буюу идэвхгүй болгоно", en: "Manage installed tenant modules, check operational status, and enable or disable features" },
+
+  "app_store.action.browse_store": { mn: "Апп Дэлгүүр рүү очих", en: "Go to the App Store" },
+
+  // Two self-contained sentences rather than one split around a link. A
+  // sentence cut in half translates badly: word order moves in Chinese and
+  // reverses in Arabic, so the fragments no longer join up.
+  "app_store.message.none_installed": { mn: "Энэ тенантад одоогоор апп суулгаагүй байна.", en: "No apps installed for this tenant yet." },
+  "app_store.message.load_failed": { mn: "Аппын каталогийг ачаалж чадсангүй", en: "Failed to load the app catalog" },
+  "app_store.message.action_failed": { mn: "Үйлдэл амжилтгүй боллоо", en: "Action failed" },
 } as const;

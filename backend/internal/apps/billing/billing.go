@@ -15,12 +15,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // VATRate is the Mongolian value added tax rate applied to e-Barimt invoices.
@@ -70,7 +70,7 @@ func (m *BillingModule) Permissions() []internal.PermissionDefinition {
 
 func (m *BillingModule) Menus() []internal.MenuDefinition {
 	return []internal.MenuDefinition{
-		{ID: "billing", ParentID: "operations", Label: "Public Billing", Path: "/billing", Icon: "credit-card", Order: 20, Labels: map[string]string{"mn": "Нэхэмжлэх"}},
+		{ID: "billing", ParentID: "operations", Label: "Public Billing", Path: "/billing", Icon: "credit-card", Order: 20, Labels: map[string]string{"mn": "Нэхэмжлэх", "ar": "الفوترة العامة", "zh": "公共计费", "fr": "Facturation publique", "ru": "Счета", "es": "Facturación pública"}},
 	}
 }
 
@@ -83,25 +83,23 @@ func (m *BillingModule) RegisterRoutes(r chi.Router, tenantAuthMiddleware func(h
 }
 
 func (m *BillingModule) listInvoicesHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	list, err := m.ListInvoices(r.Context(), tenantID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to fetch invoices")
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch invoices")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 func (m *BillingModule) createInvoiceHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -110,17 +108,17 @@ func (m *BillingModule) createInvoiceHandler(w http.ResponseWriter, r *http.Requ
 		Amount      float64 `json:"amount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ContactName == "" || req.Amount <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid invoice parameters: contact_name and a positive amount are required")
+		httpx.Error(w, http.StatusBadRequest, "invalid invoice parameters: contact_name and a positive amount are required")
 		return
 	}
 
 	inv, err := m.CreateInvoice(r.Context(), tenantID, req.ContactName, req.Amount)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, inv)
+	httpx.JSON(w, http.StatusCreated, inv)
 }
 
 func (m *BillingModule) CreateInvoice(ctx context.Context, tenantID, contactName string, amount float64) (*Invoice, error) {
@@ -170,14 +168,4 @@ func (m *BillingModule) ListInvoices(ctx context.Context, tenantID string) ([]In
 		list = append(list, inv)
 	}
 	return list, rows.Err()
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }

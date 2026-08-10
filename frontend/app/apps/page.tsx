@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { Banner } from "@/components/ui";
 import {
   Search,
-  CheckCircle2,
-  AlertCircle,
   Download,
   Power,
   PowerOff,
@@ -37,7 +36,7 @@ const appIcons: Record<string, React.ReactNode> = {
 };
 
 export default function AppStorePage() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [apps, setApps] = useState<AppItem[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -45,22 +44,27 @@ export default function AppStorePage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const loadApps = async () => {
+  const loadApps = useCallback(async () => {
     try {
       const data = await api.getStoreApps();
       setApps(data || []);
     } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Failed to load apps catalog" });
+      setMessage({ type: "error", text: err.message || t("app_store.message.load_failed") });
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
+  // The store's copy is translated by the API, so a language change means
+  // fetching the catalogue again rather than re-rendering what is held. `t`
+  // changes identity with the locale and nothing else, so depending on loadApps
+  // says exactly that — the effect used to name `locale` and quietly leave out
+  // the function it calls.
   useEffect(() => {
     setLoading(true);
     setSelectedCategory("All");
-    loadApps();
-  }, [locale]);
+    void loadApps();
+  }, [loadApps]);
 
   const handleInstall = async (app: AppItem) => {
     setActionLoading(app.slug);
@@ -92,7 +96,7 @@ export default function AppStorePage() {
       }
       await loadApps();
     } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Action failed" });
+      setMessage({ type: "error", text: err.message || t("app_store.message.action_failed") });
     } finally {
       setActionLoading(null);
     }
@@ -146,20 +150,7 @@ export default function AppStorePage() {
 
       {/* Notifications */}
       {message && (
-        <div
-          className={`p-4 rounded-lg flex items-center space-x-3 text-sm font-medium border ${
-            message.type === "success"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : "bg-red-50 border-red-200 text-red-800"
-          }`}
-        >
-          {message.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-          )}
-          <span>{message.text}</span>
-        </div>
+        <Banner tone={message.type} message={message.text} onDismiss={() => setMessage(null)} />
       )}
 
       {/* App Cards Grid */}

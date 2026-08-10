@@ -16,11 +16,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/go-chi/chi/v5"
 )
 
 // actorFrom resolves the caller into permissions and organisational scope. It
@@ -83,7 +83,7 @@ func (m *Module) listUnitsHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, units)
+	httpx.JSON(w, http.StatusOK, units)
 }
 
 func (m *Module) unitTreeHandler(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +112,7 @@ func (m *Module) unitTreeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		roots = append(roots, u)
 	}
-	writeJSON(w, http.StatusOK, roots)
+	httpx.JSON(w, http.StatusOK, roots)
 }
 
 func (m *Module) createUnitHandler(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +136,7 @@ func (m *Module) createUnitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	audit.Record(r.Context(), tenantID, actor.Email, "gov.unit_created", unit.ID, map[string]any{"code": unit.Code})
-	writeJSON(w, http.StatusCreated, unit)
+	httpx.JSON(w, http.StatusCreated, unit)
 }
 
 func (m *Module) assignUnitMemberHandler(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +168,7 @@ func (m *Module) assignUnitMemberHandler(w http.ResponseWriter, r *http.Request)
 	}
 	audit.Record(r.Context(), tenantID, actor.Email, "gov.unit_member_assigned", in.UnitID,
 		map[string]any{"user_id": in.UserID, "role": in.UnitRole})
-	writeJSON(w, http.StatusOK, map[string]string{"status": "assigned"})
+	httpx.JSON(w, http.StatusOK, map[string]string{"status": "assigned"})
 }
 
 // ─── Workflow configuration ──────────────────────────────────────────────────
@@ -177,7 +177,7 @@ func (m *Module) listTemplatesHandler(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := m.require(w, r, PermRead); !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, Templates)
+	httpx.JSON(w, http.StatusOK, Templates)
 }
 
 func (m *Module) listWorkflowsHandler(w http.ResponseWriter, r *http.Request) {
@@ -190,7 +190,7 @@ func (m *Module) listWorkflowsHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, workflows)
+	httpx.JSON(w, http.StatusOK, workflows)
 }
 
 func (m *Module) createWorkflowHandler(w http.ResponseWriter, r *http.Request) {
@@ -221,7 +221,7 @@ func (m *Module) createWorkflowHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Record(r.Context(), tenantID, actor.Email, "gov.workflow_created", version.WorkflowID,
 		map[string]any{"template": in.Template, "version": version.Version})
-	writeJSON(w, http.StatusCreated, version)
+	httpx.JSON(w, http.StatusCreated, version)
 }
 
 func (m *Module) getVersionHandler(w http.ResponseWriter, r *http.Request) {
@@ -234,7 +234,7 @@ func (m *Module) getVersionHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, notFound(err, "workflow version"))
 		return
 	}
-	writeJSON(w, http.StatusOK, version)
+	httpx.JSON(w, http.StatusOK, version)
 }
 
 func (m *Module) publishVersionHandler(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +248,7 @@ func (m *Module) publishVersionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	audit.Record(r.Context(), tenantID, actor.Email, "gov.workflow_published", versionID, nil)
-	writeJSON(w, http.StatusOK, map[string]string{"status": VersionPublished, "id": versionID})
+	httpx.JSON(w, http.StatusOK, map[string]string{"status": VersionPublished, "id": versionID})
 }
 
 func (m *Module) configureServiceHandler(w http.ResponseWriter, r *http.Request) {
@@ -280,7 +280,7 @@ func (m *Module) configureServiceHandler(w http.ResponseWriter, r *http.Request)
 	}
 	audit.Record(r.Context(), tenantID, actor.Email, "gov.service_configured", serviceID,
 		map[string]any{"mode": in.FulfillmentMode})
-	writeJSON(w, http.StatusOK, map[string]string{"status": "configured", "id": serviceID})
+	httpx.JSON(w, http.StatusOK, map[string]string{"status": "configured", "id": serviceID})
 }
 
 func (m *Module) listRoutingRulesHandler(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +293,7 @@ func (m *Module) listRoutingRulesHandler(w http.ResponseWriter, r *http.Request)
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rules)
+	httpx.JSON(w, http.StatusOK, rules)
 }
 
 func (m *Module) createRoutingRuleHandler(w http.ResponseWriter, r *http.Request) {
@@ -324,7 +324,7 @@ func (m *Module) createRoutingRuleHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 	audit.Record(r.Context(), tenantID, actor.Email, "gov.routing_rule_created", rule.ID, nil)
-	writeJSON(w, http.StatusCreated, rule)
+	httpx.JSON(w, http.StatusCreated, rule)
 }
 
 // ─── Ingestion ───────────────────────────────────────────────────────────────
@@ -352,7 +352,7 @@ func (m *Module) ingestHandler(w http.ResponseWriter, r *http.Request) {
 		audit.Record(r.Context(), tenantID, actor.Email, "gov.request_ingested", in.ExternalRequestID,
 			map[string]any{"source": in.SourceSystem, "service": in.ServiceCode})
 	}
-	writeJSON(w, status, result)
+	httpx.JSON(w, status, result)
 }
 
 // ─── Queues, detail and actions ──────────────────────────────────────────────
@@ -388,7 +388,7 @@ func (m *Module) listTasksHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, page)
+	httpx.JSON(w, http.StatusOK, page)
 }
 
 func (m *Module) requestDetailHandler(w http.ResponseWriter, r *http.Request) {
@@ -401,7 +401,7 @@ func (m *Module) requestDetailHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, detail)
+	httpx.JSON(w, http.StatusOK, detail)
 }
 
 func (m *Module) actHandler(w http.ResponseWriter, r *http.Request) {
@@ -424,7 +424,7 @@ func (m *Module) actHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Record(r.Context(), tenantID, actor.Email, "gov.task_"+in.Action, task.ID,
 		map[string]any{"status": task.Status, "unit_id": task.UnitID})
-	writeJSON(w, http.StatusOK, task)
+	httpx.JSON(w, http.StatusOK, task)
 }
 
 func (m *Module) dashboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -437,7 +437,7 @@ func (m *Module) dashboardHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, summary)
+	httpx.JSON(w, http.StatusOK, summary)
 }
 
 // ─── Outbox ──────────────────────────────────────────────────────────────────
@@ -478,7 +478,11 @@ func (m *Module) listOutboxHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		list = append(list, o)
 	}
-	writeJSON(w, http.StatusOK, list)
+	if err := rows.Err(); err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 // ─── Error rendering ─────────────────────────────────────────────────────────
@@ -491,10 +495,10 @@ func writeDomainError(w http.ResponseWriter, err error) {
 		if status == 0 {
 			status = statusForCode(domain.Code)
 		}
-		writeJSON(w, status, map[string]string{"error": domain.Message, "code": domain.Code})
+		httpx.JSON(w, status, map[string]string{"error": domain.Message, "code": domain.Code})
 		return
 	}
-	writeJSON(w, http.StatusInternalServerError, map[string]string{
+	httpx.JSON(w, http.StatusInternalServerError, map[string]string{
 		"error": "internal error", "code": "INTERNAL",
 	})
 }

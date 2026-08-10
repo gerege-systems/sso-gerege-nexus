@@ -8,6 +8,7 @@ import (
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -53,7 +54,7 @@ func (m *Module) Permissions() []internal.PermissionDefinition {
 
 func (m *Module) Menus() []internal.MenuDefinition {
 	return []internal.MenuDefinition{
-		{ID: "contacts", ParentID: "master_data", Label: "Contacts", Path: "/contacts", Icon: "users", Order: 10, Labels: map[string]string{"mn": "Харилцагчид"}},
+		{ID: "contacts", ParentID: "master_data", Label: "Contacts", Path: "/contacts", Icon: "users", Order: 10, Labels: map[string]string{"mn": "Харилцагчид", "ar": "جهات الاتصال", "zh": "联系人", "fr": "Contacts", "ru": "Контакты", "es": "Contactos"}},
 	}
 }
 
@@ -67,9 +68,8 @@ func (m *Module) RegisterRoutes(r chi.Router, tenantAuthMiddleware func(http.Han
 }
 
 func (m *Module) listContactsHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -77,7 +77,7 @@ func (m *Module) listContactsHandler(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, tenant_id, name, email, phone, company, active, created_at, updated_at 
 		 FROM contacts WHERE tenant_id = $1 ORDER BY name ASC`, tenantID)
 	if err != nil {
-		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "database error")
 		return
 	}
 	defer rows.Close()
@@ -86,10 +86,17 @@ func (m *Module) listContactsHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c Contact
 		if err := rows.Scan(&c.ID, &c.TenantID, &c.Name, &c.Email, &c.Phone, &c.Company, &c.Active, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			http.Error(w, `{"error":"scan error"}`, http.StatusInternalServerError)
+			httpx.Error(w, http.StatusInternalServerError, "scan error")
 			return
 		}
 		list = append(list, c)
+	}
+	// A stream that breaks partway through ends the loop the same way a
+	// complete one does, so without this the caller receives a short list
+	// under a 200 and has no way to tell it apart from the whole set.
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "scan error")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -99,7 +106,7 @@ func (m *Module) listContactsHandler(w http.ResponseWriter, r *http.Request) {
 func (m *Module) createContactHandler(w http.ResponseWriter, r *http.Request) {
 	claims, err := auth.UserFromContext(r.Context())
 	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -111,7 +118,7 @@ func (m *Module) createContactHandler(w http.ResponseWriter, r *http.Request) {
 		Active  bool   `json:"active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
-		http.Error(w, `{"error":"invalid contact payload, name is required"}`, http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid contact payload, name is required")
 		return
 	}
 
@@ -123,7 +130,7 @@ func (m *Module) createContactHandler(w http.ResponseWriter, r *http.Request) {
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		id, claims.TenantID, req.Name, req.Email, req.Phone, req.Company, req.Active, now, now)
 	if err != nil {
-		http.Error(w, `{"error":"failed to create contact"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "failed to create contact")
 		return
 	}
 
@@ -147,7 +154,7 @@ func (m *Module) createContactHandler(w http.ResponseWriter, r *http.Request) {
 func (m *Module) updateContactHandler(w http.ResponseWriter, r *http.Request) {
 	claims, err := auth.UserFromContext(r.Context())
 	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -160,7 +167,7 @@ func (m *Module) updateContactHandler(w http.ResponseWriter, r *http.Request) {
 		Active  bool   `json:"active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
-		http.Error(w, `{"error":"invalid payload"}`, http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
@@ -170,7 +177,7 @@ func (m *Module) updateContactHandler(w http.ResponseWriter, r *http.Request) {
 		 WHERE id = $7 AND tenant_id = $8`,
 		req.Name, req.Email, req.Phone, req.Company, req.Active, now, id, claims.TenantID)
 	if err != nil || res.RowsAffected() == 0 {
-		http.Error(w, `{"error":"contact not found or unauthorized"}`, http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "contact not found or unauthorized")
 		return
 	}
 

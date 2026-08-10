@@ -18,6 +18,16 @@ linters:
       - path: _test\.go
         linters: [errcheck]
 
+      # misspell only knows English, and these lines are deliberately not in
+      # it: the menu labels the server owns now carry all seven platform
+      # languages inline. Left on, it reads "Inventario" as a typo for
+      # "Inventor", "Transferts" for "Transfers" and "Demandes" for
+      # "Demands" — and the only way to satisfy it would be to mistranslate.
+      # Scoped to lines holding a locale map rather than to whole files, so
+      # the English prose around them is still checked.
+      - source: '"(mn|ar|zh|fr|ru|es)":\s'
+        linters: [misspell]
+
 formatters:
   enable:
     - gofmt

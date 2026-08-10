@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/async"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -93,7 +94,7 @@ func (s *Service) sweepState(ctx context.Context) (int64, error) {
 
 // StartHousekeeping removes abandoned ceremony state until ctx is cancelled.
 func (s *Service) StartHousekeeping(ctx context.Context) {
-	go func() {
+	async.Go("eid-state-housekeeping", func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for {
@@ -115,5 +116,5 @@ func (s *Service) StartHousekeeping(ctx context.Context) {
 				}
 			}
 		}
-	}()
+	})
 }

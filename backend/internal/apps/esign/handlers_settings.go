@@ -18,6 +18,7 @@ import (
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/config"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/gerege"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 )
 
 func (m *Module) getSettingsHandler(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +31,7 @@ func (m *Module) getSettingsHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, settings)
+	httpx.JSON(w, http.StatusOK, settings)
 }
 
 func (m *Module) settings(r *http.Request, tenantID string) (*Settings, error) {
@@ -100,7 +101,7 @@ func (m *Module) updatePlacementHandler(w http.ResponseWriter, r *http.Request) 
 	audit.Record(r.Context(), tenantID, actor.UserID, "esign.placement_updated", "esign", map[string]any{
 		"x": req.X, "y": req.Y, "width": req.Width, "height": req.Height, "page": req.PageNumber,
 	})
-	writeJSON(w, http.StatusOK, req)
+	httpx.JSON(w, http.StatusOK, req)
 }
 
 func (m *Module) updatePolicyHandler(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +130,7 @@ func (m *Module) updatePolicyHandler(w http.ResponseWriter, r *http.Request) {
 		"default_provider": req.DefaultProvider, "require_eid": req.RequireEID,
 		"allow_self_sign": req.AllowSelfSign, "retention_days": req.RetentionDays,
 	})
-	writeJSON(w, http.StatusOK, req)
+	httpx.JSON(w, http.StatusOK, req)
 }
 
 // testHSMHandler probes the eSign service so an operator can tell a
@@ -182,7 +183,7 @@ func (m *Module) testHSMHandler(w http.ResponseWriter, r *http.Request) {
 	audit.Record(r.Context(), tenantID, actor.UserID, "esign.hsm_probed", "esign", map[string]any{
 		"ok": probe.OK, "latency_ms": probe.LatencyMs,
 	})
-	writeJSON(w, http.StatusOK, probe)
+	httpx.JSON(w, http.StatusOK, probe)
 }
 
 // isReachableRejection distinguishes "the service said no" from "the service

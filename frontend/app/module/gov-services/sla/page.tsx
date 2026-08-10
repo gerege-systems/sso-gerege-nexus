@@ -1,20 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Dashboard, Page, Task, Workflow, WorkflowVersion, gov } from "@/lib/gov";
+import { Dashboard, Page, RequestDetail, Task, Workflow, WorkflowVersion, gov } from "@/lib/gov";
 import { useI18n } from "@/lib/i18n";
 import RequestDrawer from "@/components/gov/RequestDrawer";
-import {
-  Banner,
-  DashboardCards,
-  EmptyState,
-  Loading,
-  PageHeader,
-  StatusBadge,
-  describeError,
-} from "@/components/gov/shared";
+import { Banner, EmptyState, Loading, PageHeader } from "@/components/ui";
+import { DashboardCards, StatusBadge, describeError } from "@/components/gov/shared";
 import { Timer } from "lucide-react";
-import { RequestDetail } from "@/lib/gov";
 
 /** Service levels: the time standard each workflow step carries, and the work
  *  that has run past it. Overdue is derived from due_at, so nothing here

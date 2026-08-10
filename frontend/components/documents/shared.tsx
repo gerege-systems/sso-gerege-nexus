@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { Banner, Modal, fieldClass } from "@/components/ui";
 import {
-  AlertTriangle,
   Ban,
   CheckCircle,
   Clock,
@@ -15,7 +15,6 @@ import {
   Send,
   ShieldCheck,
   Users,
-  X,
   XCircle,
 } from "lucide-react";
 
@@ -214,57 +213,15 @@ export function SignatureCell({ doc }: { doc: DocumentRecord }) {
   return <span className="text-slate-400 italic">{t("documents.state.pending_signature")}</span>;
 }
 
-/** The heading every Documents screen opens with. */
-export function SectionHeader({
-  icon,
-  title,
-  subtitle,
-  actions,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <header className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          {icon}
-          {title}
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
-      </div>
-      {actions}
-    </header>
-  );
-}
-
+/**
+ * The outcome of an action, as a screen holds it in state.
+ *
+ * `type` is the shared Banner's tone, so a screen renders one with
+ * `<Banner tone={message.type} message={message.text} />`.
+ */
 export interface ActionMessage {
   type: "success" | "error";
   text: string;
-}
-
-export function Banner({ message, onDismiss }: { message: ActionMessage; onDismiss: () => void }) {
-  const { t } = useI18n();
-  const error = message.type === "error";
-  return (
-    <div
-      className={`p-4 rounded-lg flex items-start space-x-3 text-sm font-medium border ${
-        error ? "bg-red-50 border-red-200 text-red-800" : "bg-emerald-50 border-emerald-200 text-emerald-800"
-      }`}
-    >
-      {error ? (
-        <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-      ) : (
-        <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-      )}
-      <span className="flex-1">{message.text}</span>
-      <button onClick={onDismiss} aria-label={t("base.action.close")}>
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
 }
 
 /**
@@ -529,147 +486,144 @@ export function SignatureDialog({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200">
-        <h2 className="text-xl font-bold text-slate-900 mb-1 flex items-center space-x-2">
-          <PenLine className="w-5 h-5 text-indigo-600" />
-          <span>{t("documents.view.sign_title")}</span>
-        </h2>
-        <p className="text-xs text-slate-500 mb-4 truncate">{doc.title}</p>
+    <Modal label={t("documents.view.sign_title")}>
+      <h2 className="text-xl font-bold text-slate-900 mb-1 flex items-center space-x-2">
+        <PenLine className="w-5 h-5 text-indigo-600" />
+        <span>{t("documents.view.sign_title")}</span>
+      </h2>
+      <p className="text-xs text-slate-500 mb-4 truncate">{doc.title}</p>
 
-        {failure && (
-          <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-red-800 text-xs flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{failure}</span>
-          </div>
-        )}
+      {failure && (
+        <div className="mb-4">
+          <Banner tone="error" message={failure} />
+        </div>
+      )}
 
-        {session ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-center">
-              <p className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wide">
-                {t("documents.field.verification_code")}
-              </p>
-              <p className="text-3xl font-bold tracking-[0.2em] text-indigo-900 mt-1">
-                {session.verification_code}
-              </p>
-              <p className="text-[11px] text-indigo-700 mt-2">{t("documents.message.verification_code_hint")}</p>
-            </div>
-
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-              <span className="flex-1">
-                {t("documents.message.awaiting_approval", { reg: regNumber.toUpperCase() })}
-              </span>
-              {/* Only when eID gave a deadline to count down. A countdown we made up
-                  is worse than none: it hurries the citizen and then says the
-                  request expired while eID is still waiting for them. */}
-              {statedDeadline(session.expires_at) !== null && (
-                <span className="font-mono text-xs text-slate-500 tabular-nums">
-                  {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}
-                </span>
-              )}
-            </div>
-
-            <p className="text-[11px] text-slate-500">
-              {t("documents.message.approval_display_text")}: <span className="italic">{session.display_text}</span>
+      {session ? (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-center">
+            <p className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wide">
+              {t("documents.field.verification_code")}
             </p>
+            <p className="text-3xl font-bold tracking-[0.2em] text-indigo-900 mt-1">
+              {session.verification_code}
+            </p>
+            <p className="text-[11px] text-indigo-700 mt-2">{t("documents.message.verification_code_hint")}</p>
+          </div>
 
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+            <span className="flex-1">
+              {t("documents.message.awaiting_approval", { reg: regNumber.toUpperCase() })}
+            </span>
+            {/* Only when eID gave a deadline to count down. A countdown we made up
+                is worse than none: it hurries the citizen and then says the
+                request expired while eID is still waiting for them. */}
+            {statedDeadline(session.expires_at) !== null && (
+              <span className="font-mono text-xs text-slate-500 tabular-nums">
+                {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}
+              </span>
+            )}
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            {t("documents.message.approval_display_text")}: <span className="italic">{session.display_text}</span>
+          </p>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
+          >
+            {t("base.action.cancel")}
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              {t("documents.field.signature_method")}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["EID", "DAN"] as SignMethod[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMethod(m)}
+                  className={`py-2 rounded-lg text-xs font-semibold border transition ${
+                    method === m
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  {m === "EID" ? "E-ID (eidmongolia.mn)" : "DAN (dan.gerege.mn)"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              {method === "EID"
+                ? t("documents.message.eid_method_hint")
+                : t("documents.message.dan_method_hint")}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              {t("documents.field.reg_number")} *
+            </label>
+            {/* The same bounds the server holds (RegNumberLimit..RegNumberMax), so a
+                number that could never be a registration number is caught in the
+                field rather than as a 400 after the operator has committed to it. */}
+            <input
+              type="text"
+              placeholder="УБ99010111"
+              value={regNumber}
+              onChange={(e) => setRegNumber(e.target.value)}
+              className={`${fieldClass} font-mono`}
+              minLength={8}
+              maxLength={64}
+              required
+            />
+          </div>
+
+          {method === "DAN" && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                {t("documents.field.otp_code")}
+              </label>
+              <input
+                type="text"
+                placeholder="123456"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                className={`${fieldClass} font-mono`}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center space-x-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
+              className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
             >
               {t("base.action.cancel")}
             </button>
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs disabled:opacity-50"
+            >
+              {busy
+                ? t("documents.message.signing")
+                : method === "EID"
+                  ? t("documents.action.request_approval")
+                  : t("documents.action.sign")}
+            </button>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                {t("documents.field.signature_method")}
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["EID", "DAN"] as SignMethod[]).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMethod(m)}
-                    className={`py-2 rounded-lg text-xs font-semibold border transition ${
-                      method === m
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    {m === "EID" ? "E-ID (eidmongolia.mn)" : "DAN (dan.gerege.mn)"}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1.5">
-                {method === "EID"
-                  ? t("documents.message.eid_method_hint")
-                  : t("documents.message.dan_method_hint")}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {t("documents.field.reg_number")} *
-              </label>
-              {/* The same bounds the server holds (RegNumberLimit..RegNumberMax), so a
-                  number that could never be a registration number is caught in the
-                  field rather than as a 400 after the operator has committed to it. */}
-              <input
-                type="text"
-                placeholder="УБ99010111"
-                value={regNumber}
-                onChange={(e) => setRegNumber(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono"
-                minLength={8}
-                maxLength={64}
-                required
-              />
-            </div>
-
-            {method === "DAN" && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t("documents.field.otp_code")}
-                </label>
-                <input
-                  type="text"
-                  placeholder="123456"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center space-x-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
-              >
-                {t("base.action.cancel")}
-              </button>
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs disabled:opacity-50"
-              >
-                {busy
-                  ? t("documents.message.signing")
-                  : method === "EID"
-                    ? t("documents.action.request_approval")
-                    : t("documents.action.sign")}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
+        </form>
+      )}
+    </Modal>
   );
 }
 
@@ -736,140 +690,138 @@ export function SignatureHistoryDialog({ doc, onClose }: { doc: DocumentRecord; 
   const rows = [...chainRows, ...extraRows];
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
-        <h2 className="text-xl font-bold text-slate-900 mb-1 flex items-center space-x-2">
-          <ShieldCheck className="w-5 h-5 text-indigo-600" />
-          <span>{t("documents.view.history_title")}</span>
-        </h2>
-        <div className="flex items-center gap-2 mb-4 min-w-0">
-          <p className="text-xs text-slate-500 truncate">{doc.title}</p>
-          {/* The trail covers the list, so the status has to travel with it: the same
-              unfilled steps mean "still to come" on a pending document and "never
-              given" on one that has been decided, and the dialog says nothing else
-              about which this is. */}
-          <StatusBadge status={doc.status} />
+    <Modal size="lg" label={t("documents.view.history_title")}>
+      <h2 className="text-xl font-bold text-slate-900 mb-1 flex items-center space-x-2">
+        <ShieldCheck className="w-5 h-5 text-indigo-600" />
+        <span>{t("documents.view.history_title")}</span>
+      </h2>
+      <div className="flex items-center gap-2 mb-4 min-w-0">
+        <p className="text-xs text-slate-500 truncate">{doc.title}</p>
+        {/* The trail covers the list, so the status has to travel with it: the same
+            unfilled steps mean "still to come" on a pending document and "never
+            given" on one that has been decided, and the dialog says nothing else
+            about which this is. */}
+        <StatusBadge status={doc.status} />
+      </div>
+
+      {error ? (
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>
+      ) : signatures === null ? (
+        <div className="flex items-center gap-2 text-slate-500 text-sm py-6">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          {t("documents.message.loading")}
         </div>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-slate-500 py-6">{t("documents.message.no_signatures")}</p>
+      ) : (
+        <ol className="space-y-3 max-h-[60vh] overflow-y-auto">
+          {rows.map(({ step, signature }, index) => {
+            const filled = Boolean(signature);
+            // Only a pending document is still waiting for anything. On a decided
+            // one — rejected, or approved before its type had a chain — an unfilled
+            // step is an approval that was never given, and calling it "Later" told
+            // an operator that a closed document was still moving.
+            const open = doc.status === PENDING;
+            const isNext = !filled && open && rows.findIndex((r) => !r.signature) === index;
 
-        {error ? (
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>
-        ) : signatures === null ? (
-          <div className="flex items-center gap-2 text-slate-500 text-sm py-6">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            {t("documents.message.loading")}
-          </div>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-slate-500 py-6">{t("documents.message.no_signatures")}</p>
-        ) : (
-          <ol className="space-y-3 max-h-[60vh] overflow-y-auto">
-            {rows.map(({ step, signature }, index) => {
-              const filled = Boolean(signature);
-              // Only a pending document is still waiting for anything. On a decided
-              // one — rejected, or approved before its type had a chain — an unfilled
-              // step is an approval that was never given, and calling it "Later" told
-              // an operator that a closed document was still moving.
-              const open = doc.status === PENDING;
-              const isNext = !filled && open && rows.findIndex((r) => !r.signature) === index;
-
-              return (
-                <li
-                  key={step ? `step-${step.order}` : `sig-${index}`}
-                  className={`border rounded-lg p-3 ${
-                    filled
-                      ? "border-slate-200"
-                      : isNext
-                        ? "border-indigo-300 bg-indigo-50/40"
-                        : "border-dashed border-slate-200"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-5 h-5 shrink-0 rounded-full text-[10px] font-bold grid place-items-center ${
-                            filled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {step ? step.order : index + 1}
-                        </span>
-                        <p className="text-sm font-semibold text-slate-900 truncate">
-                          {signature ? signature.signer_name : step?.name || "—"}
-                        </p>
-                        {!step && signature && steps.length > 0 && (
-                          <span className="shrink-0 text-[10px] text-slate-500 italic">
-                            {t("documents.message.signature_outside_chain")}
-                          </span>
-                        )}
-                      </div>
-                      <p className="font-mono text-[11px] text-slate-500 mt-0.5 pl-7">
-                        {signature
-                          ? signature.signer_reg_number
-                          : step?.signer_reg_number || t("documents.message.step_open_to_anyone")}
-                      </p>
-                    </div>
-                    {filled ? (
-                      <span className="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                        {signature!.signer_method === "EID" ? "E-ID" : signature!.signer_method}
-                      </span>
-                    ) : (
+            return (
+              <li
+                key={step ? `step-${step.order}` : `sig-${index}`}
+                className={`border rounded-lg p-3 ${
+                  filled
+                    ? "border-slate-200"
+                    : isNext
+                      ? "border-indigo-300 bg-indigo-50/40"
+                      : "border-dashed border-slate-200"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
                       <span
-                        className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
-                          isNext
-                            ? "bg-indigo-100 text-indigo-700 border-indigo-200"
-                            : "bg-slate-50 text-slate-500 border-slate-200"
+                        className={`w-5 h-5 shrink-0 rounded-full text-[10px] font-bold grid place-items-center ${
+                          filled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
                         }`}
                       >
-                        {isNext
-                          ? t("documents.state.awaiting_now")
-                          : open
-                            ? t("documents.state.awaiting_later")
-                            : t("documents.state.never_given")}
+                        {step ? step.order : index + 1}
                       </span>
-                    )}
-                  </div>
-
-                  {signature && (
-                    <dl className="mt-2 space-y-1 text-[11px] pl-7">
-                      <div className="flex gap-2">
-                        <dt className="text-slate-500 shrink-0">{t("documents.field.signed_at")}:</dt>
-                        <dd className="text-slate-700">{new Date(signature.signed_at).toLocaleString()}</dd>
-                      </div>
-                      {signature.certificate_serial ? (
-                        <>
-                          <div className="flex gap-2">
-                            <dt className="text-slate-500 shrink-0">{t("documents.field.certificate_serial")}:</dt>
-                            <dd className="font-mono text-slate-700 break-all">{signature.certificate_serial}</dd>
-                          </div>
-                          {signature.certificate_issuer && (
-                            <div className="flex gap-2">
-                              <dt className="text-slate-500 shrink-0">{t("documents.field.certificate_issuer")}:</dt>
-                              <dd className="text-slate-700 break-all">{signature.certificate_issuer}</dd>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="flex gap-2">
-                          <dt className="text-slate-500 shrink-0">{t("documents.field.approval_reference")}:</dt>
-                          <dd className="font-mono text-slate-500 break-all">{signature.signature_hash}</dd>
-                        </div>
+                      <p className="text-sm font-semibold text-slate-900 truncate">
+                        {signature ? signature.signer_name : step?.name || "—"}
+                      </p>
+                      {!step && signature && steps.length > 0 && (
+                        <span className="shrink-0 text-[10px] text-slate-500 italic">
+                          {t("documents.message.signature_outside_chain")}
+                        </span>
                       )}
-                    </dl>
+                    </div>
+                    <p className="font-mono text-[11px] text-slate-500 mt-0.5 pl-7">
+                      {signature
+                        ? signature.signer_reg_number
+                        : step?.signer_reg_number || t("documents.message.step_open_to_anyone")}
+                    </p>
+                  </div>
+                  {filled ? (
+                    <span className="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      {signature!.signer_method === "EID" ? "E-ID" : signature!.signer_method}
+                    </span>
+                  ) : (
+                    <span
+                      className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                        isNext
+                          ? "bg-indigo-100 text-indigo-700 border-indigo-200"
+                          : "bg-slate-50 text-slate-500 border-slate-200"
+                      }`}
+                    >
+                      {isNext
+                        ? t("documents.state.awaiting_now")
+                        : open
+                          ? t("documents.state.awaiting_later")
+                          : t("documents.state.never_given")}
+                    </span>
                   )}
-                </li>
-              );
-            })}
-          </ol>
-        )}
+                </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-5 w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
-        >
-          {t("base.action.close")}
-        </button>
-      </div>
-    </div>
+                {signature && (
+                  <dl className="mt-2 space-y-1 text-[11px] pl-7">
+                    <div className="flex gap-2">
+                      <dt className="text-slate-500 shrink-0">{t("documents.field.signed_at")}:</dt>
+                      <dd className="text-slate-700">{new Date(signature.signed_at).toLocaleString()}</dd>
+                    </div>
+                    {signature.certificate_serial ? (
+                      <>
+                        <div className="flex gap-2">
+                          <dt className="text-slate-500 shrink-0">{t("documents.field.certificate_serial")}:</dt>
+                          <dd className="font-mono text-slate-700 break-all">{signature.certificate_serial}</dd>
+                        </div>
+                        {signature.certificate_issuer && (
+                          <div className="flex gap-2">
+                            <dt className="text-slate-500 shrink-0">{t("documents.field.certificate_issuer")}:</dt>
+                            <dd className="text-slate-700 break-all">{signature.certificate_issuer}</dd>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex gap-2">
+                        <dt className="text-slate-500 shrink-0">{t("documents.field.approval_reference")}:</dt>
+                        <dd className="font-mono text-slate-500 break-all">{signature.signature_hash}</dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-5 w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
+      >
+        {t("base.action.close")}
+      </button>
+    </Modal>
   );
 }
 

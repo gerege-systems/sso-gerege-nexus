@@ -278,6 +278,9 @@ func pemFromEnv(inlineVar, fileVar string) []byte {
 		return []byte(strings.ReplaceAll(inline, `\n`, "\n"))
 	}
 	if path := strings.TrimSpace(os.Getenv(fileVar)); path != "" {
+		// #nosec G304 -- the path is an environment variable set by whoever
+		// operates the deployment, pointing at their own signing certificate.
+		// A caller cannot reach it: nothing in a request contributes to it.
 		if raw, err := os.ReadFile(path); err == nil {
 			return raw
 		}

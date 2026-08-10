@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 )
 
 func (m *Module) listLogsHandler(w http.ResponseWriter, r *http.Request) {
@@ -30,12 +32,12 @@ func (m *Module) listLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// As with documents, the original endpoint answered with a bare array.
 	if r.URL.Query().Get("paginated") == "true" {
-		writeJSON(w, http.StatusOK, Page[SignatureLog]{
+		httpx.JSON(w, http.StatusOK, Page[SignatureLog]{
 			Items: list, Total: total, Limit: query.Limit, Offset: query.Offset,
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 // exportLogsHandler streams the filtered log as CSV. An auditor needs the

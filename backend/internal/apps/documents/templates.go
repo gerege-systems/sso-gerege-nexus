@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-
-	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // ErrTemplateNotFound is returned for a template id this tenant does not hold.
@@ -240,24 +240,22 @@ func (m *DocumentsModule) CreateDocumentFromTemplate(ctx context.Context, tenant
 }
 
 func (m *DocumentsModule) listTemplatesHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	list, err := m.ListTemplates(r.Context(), tenantID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to fetch templates")
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch templates")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 func (m *DocumentsModule) createTemplateHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -267,26 +265,25 @@ func (m *DocumentsModule) createTemplateHandler(w http.ResponseWriter, r *http.R
 		TitlePattern string `json:"title_pattern"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid template payload")
+		httpx.Error(w, http.StatusBadRequest, "invalid template payload")
 		return
 	}
 
 	tpl, err := m.CreateTemplate(r.Context(), tenantID, req.Name, req.DocType, req.TitlePattern)
 	switch {
 	case errors.Is(err, ErrTemplateNameTaken):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case err != nil:
 		writeWriteFailure(r.Context(), w, err, "failed to save template")
 		return
 	}
-	writeJSON(w, http.StatusCreated, tpl)
+	httpx.JSON(w, http.StatusCreated, tpl)
 }
 
 func (m *DocumentsModule) updateTemplateHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -297,7 +294,7 @@ func (m *DocumentsModule) updateTemplateHandler(w http.ResponseWriter, r *http.R
 		Active       bool   `json:"active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid template payload")
+		httpx.Error(w, http.StatusBadRequest, "invalid template payload")
 		return
 	}
 
@@ -305,54 +302,52 @@ func (m *DocumentsModule) updateTemplateHandler(w http.ResponseWriter, r *http.R
 		req.Name, req.DocType, req.TitlePattern, req.Active)
 	switch {
 	case errors.Is(err, ErrTemplateNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
+		httpx.Error(w, http.StatusNotFound, err.Error())
 		return
 	case errors.Is(err, ErrTemplateNameTaken):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case err != nil:
 		writeWriteFailure(r.Context(), w, err, "failed to save template")
 		return
 	}
-	writeJSON(w, http.StatusOK, tpl)
+	httpx.JSON(w, http.StatusOK, tpl)
 }
 
 func (m *DocumentsModule) deleteTemplateHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	switch err := m.DeleteTemplate(r.Context(), tenantID, chi.URLParam(r, "id")); {
 	case errors.Is(err, ErrTemplateNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
+		httpx.Error(w, http.StatusNotFound, err.Error())
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "failed to delete template")
+		httpx.Error(w, http.StatusInternalServerError, "failed to delete template")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (m *DocumentsModule) useTemplateHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	doc, err := m.CreateDocumentFromTemplate(r.Context(), tenantID, chi.URLParam(r, "id"))
 	switch {
 	case errors.Is(err, ErrTemplateNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
+		httpx.Error(w, http.StatusNotFound, err.Error())
 		return
 	case errors.Is(err, ErrTemplateRetired):
 		// 409, not 404: the template is there. The screen hides Use on a retired row,
 		// so reaching this means the page is older than the retirement — and the
 		// answer has to say so, or the operator goes looking for a template they can
 		// see in front of them.
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case err != nil:
 		// A pattern that resolves to an over-long title is the template's problem,
@@ -360,5 +355,5 @@ func (m *DocumentsModule) useTemplateHandler(w http.ResponseWriter, r *http.Requ
 		writeWriteFailure(r.Context(), w, err, "failed to create document from template")
 		return
 	}
-	writeJSON(w, http.StatusCreated, doc)
+	httpx.JSON(w, http.StatusCreated, doc)
 }

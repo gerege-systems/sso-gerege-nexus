@@ -183,11 +183,8 @@ export class EsignApiError extends Error {
 }
 
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("session_token") : null;
   const locale = typeof window !== "undefined" ? window.localStorage.getItem("locale") || "mn" : "mn";
-  const headers: Record<string, string> = { "Accept-Language": locale, ...extra };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
+  return { "Accept-Language": locale, ...extra };
 }
 
 /**
@@ -208,7 +205,7 @@ async function readJSON<T>(res: Response): Promise<T | null> {
 }
 
 /** Turns a status with no usable body into something a person can act on. */
-export function httpErrorMessage(status: number): string {
+function httpErrorMessage(status: number): string {
   if (status === 413) return "Файл хэт том байна.";
   if (status === 401 || status === 403) return "Нэвтрэлт дууссан эсвэл эрх хүрэхгүй байна.";
   if (status === 429) return "Хэт олон хүсэлт илгээлээ. Түр хүлээгээд дахин оролдоно уу.";

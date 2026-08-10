@@ -1,7 +1,7 @@
 "use client";
 
 import TaskQueue from "@/components/gov/TaskQueue";
-import { PageHeader } from "@/components/gov/shared";
+import { PageHeader } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { Inbox } from "lucide-react";
 

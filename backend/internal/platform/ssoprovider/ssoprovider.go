@@ -141,7 +141,6 @@ func (s *SSOProvider) signingKey(ctx context.Context) (*signingKey, error) {
 	if cached != nil {
 		return cached, nil
 	}
-
 	s.keyMu.Lock()
 	defer s.keyMu.Unlock()
 	if s.key != nil {

@@ -112,6 +112,11 @@ OAuth2 / OIDC стандартаар энэ нэвтрэлтэд холбогд�
 - **Платформын өөрийн OAuth2 / OIDC provider**
   (`/.well-known/openid-configuration`) — гуравдагч системд client credentials
   урсгалаар токен олгоно.
+- **И-мэйл баталгаажуулалт** (`platform/emailverify`) — хаяг эзэмшлийг батлах
+  нэгдсэн урсгал, платформын бүх апп модуль Go дуудлагаар ашиглана. Захидлыг
+  хостинг үйлчилгээ (`enigma.mn`) илгээх тул платформ SMTP нууц үг, илгээгчийн
+  хаяг эзэмшихгүй. Хэрэглэгч буцаж ирэхэд баталгаажуулалт бүртгэгдэнэ — буцах
+  утга нэг л удаа ажиллана. Тохиргоо → И-мэйл баталгаажуулалт дотор харагдана.
 
 > **Анхаар.** E-ID / ДАН / ХУР-ын mock горим зөвхөн хөгжүүлэлтийн орчинд
 > ажиллана. `ENVIRONMENT=production` үед mock горим автоматаар унтарч,
@@ -160,6 +165,16 @@ catalog/              Апп сторын каталог ба manifest-ууд
 deploy/               Production Dockerfile, Nginx тохиргоо
 docs/                 Баримт бичиг ба орчуулгууд
 ```
+
+---
+
+## Десктоп дээр суулгах
+
+Тусдаа native клиент энэ агуулахад байхгүй. Вэб клиент нь PWA
+(`/manifest.webmanifest`) тул хөтчөөс шууд суулгаж болно: Chrome/Edge дээр
+хаягийн мөрний суулгах товч, Safari дээр **File → Add to Dock**. Суулгасан
+хувилбар нь dock эсвэл taskbar-т орж, өөрийн цонхоор нээгддэг — татаж авах
+файлгүй, дэлгүүргүй, вэбтэй яг ижил хуудсуудыг үзүүлнэ.
 
 ---
 
@@ -283,12 +298,17 @@ npm run dev
 | `POST` | `/api/v1/auth/eid/login` | Үндэсний E-ID-аар нэвтрэх |
 | `POST` | `/api/v1/auth/dan/login` | ДАН гарцаар нэвтрэх |
 | `POST` | `/api/v1/auth/logout` | Session-ийг цуцлах |
+| `GET` | `/api/v1/auth/tenants` | Хэрэглэгчийн харьяалагдах байгууллагууд |
+| `POST` | `/api/v1/auth/switch-tenant` | Session-ийг өөр байгууллага руу шилжүүлэх |
 | `GET` | `/api/v1/menus` | Тенантад идэвхтэй цэсүүд |
 | `GET` | `/api/v1/store/apps` | Апп сторын жагсаалт |
 | `POST` | `/api/v1/ai/chat`, `/stt`, `/tts`, `/translate` | Tenant-safe Gemini AI pipeline |
 | `GET/PUT` | `/api/v1/admin/ai/prompts/{key}` | AI prompt тохируулах (админ) |
 | `GET/POST` | `/api/v1/admin/ai/knowledge` | AI мэдлэгийн сан (админ) |
 | `POST` | `/api/v1/store/apps/{slug}/install` | Апп суулгах (админ) |
+| `POST` | `/api/v1/verify/send` | Хостинг үйлчилгээнээс баталгаажуулах холбоос хүсэх |
+| `GET` | `/api/v1/verify/landed` | Баталгаажуулсан хэрэглэгчийг хүлээн авах — нэг л удаа ажиллана |
+| `GET` | `/api/v1/admin/email-verification/overview` | Баталгаажуулалтын тойм ба үйлчилгээний төлөв (админ) |
 | `POST` | `/oauth2/token` | OAuth2 client credentials токен |
 
 Нэвтрэлтийн токен нь HttpOnly cookie эсвэл `Authorization: Bearer <token>`

@@ -1,8 +1,32 @@
+// Package resilience holds the load shedder, and only the load shedder.
+//
+// It used to also hold an SRE-style adaptive circuit breaker, an exponential
+// backoff retry and a singleflight. All three were removed rather than wired
+// up, because the reasons to wire them had already been answered better
+// elsewhere:
+//
+//   - Every outbound client already carries a timeout — integration, gerege,
+//     emailverify and eid each set one on their http.Client.
+//   - Delivery already retries, in integration.deliver, against a bounded
+//     backoff schedule and only for failures attemptDelivery classifies as
+//     retryable. The generic DoWithRetry retried everything, so putting it in
+//     front of a 400 would have sent the same rejected request three times.
+//   - The breaker and the singleflight had never executed outside their own
+//     tests, and the singleflight leaked: a panic inside the guarded function
+//     skipped both wg.Done and the map delete, so every later caller for that
+//     key blocked forever. Introducing that to the eID, DAN and payment paths
+//     would have been the opposite of resilience.
+//
+// If a breaker is wanted later, it should arrive attached to the call it
+// guards. An unused one in a package named "resilience" reads, to anyone
+// scanning for it, as a protection this platform already has.
 package resilience
 
 import (
 	"net/http"
 	"sync/atomic"
+
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 )
 
 type LoadShedder struct {
@@ -27,7 +51,7 @@ func (ls *LoadShedder) Middleware(next http.Handler) http.Handler {
 
 		if current > ls.maxInFlight {
 			w.Header().Set("Retry-After", "5")
-			http.Error(w, `{"error":"service overloaded: load shedding active"}`, http.StatusServiceUnavailable)
+			httpx.Error(w, http.StatusServiceUnavailable, "service overloaded: load shedding active")
 			return
 		}
 

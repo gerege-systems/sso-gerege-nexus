@@ -95,6 +95,51 @@ func (m *Module) RegisterRoutes(r chi.Router, gateMiddleware func(http.Handler) 
 }
 ```
 
+### Using platform services
+
+Anything more than one app needs lives in `internal/platform/` and reaches a
+module through its constructor, not through a package-level singleton. The
+server builds one instance in `NewServer` and passes it in, the way
+`gov_services` receives the integration manager.
+
+Email verification is one of these. Do not grow your own token table:
+
+```go
+type Module struct {
+    db          *pgxpool.Pool
+    emailVerify *emailverify.Service
+}
+
+func New(db *pgxpool.Pool, emailVerify *emailverify.Service) *Module { /* … */ }
+
+// Somewhere in a handler, with the tenant taken from the request context:
+_, err := m.emailVerify.Send(ctx, tenantID, emailverify.Request{
+    Email:       invitee.Email,
+    Source:      m.ID(),          // kept on the row, so the audit trail names you
+    Purpose:     "invoice_portal_invite",
+    RedirectURL: "https://portal.example/invited", // optional; HTTPS only
+})
+```
+
+The mail is sent by the hosted verification service — this platform holds no
+mailbox credential and composes no message. `Send` asks for the link, records
+the request, and enforces the local sending limits. When the recipient follows
+the link they come back to `/api/v1/verify/landed`, the verification is marked
+confirmed exactly once, and they are forwarded to the `RedirectURL` you named.
+
+Map the errors rather than reporting them all as server failures:
+
+| Error | Meaning | Answer |
+| --- | --- | --- |
+| `*emailverify.InvalidError` | a bad address or destination | `400` |
+| `*emailverify.RateLimitedError` | carries `RetryAfter` | `429` |
+| `ErrNotConfigured`, `ErrOriginNotHTTPS`, `ErrUnauthorizedKey` | this deployment's configuration, not the request | `503` |
+| `ErrUpstream` | the service could not send or could not be reached; retryable | `502` |
+
+There is no webhook yet, so a verification is recorded only when the person
+returns here. Treat `PENDING` as "we have not seen them come back", not as
+"they ignored it".
+
 ### Step 4: Create App Manifest JSON
 Add a manifest file in `catalog/manifests/invoices.json`:
 

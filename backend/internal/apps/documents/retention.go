@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/go-chi/chi/v5"
 )
 
 // RetentionRule is how long a document type is kept. Nothing deletes on this
@@ -189,24 +189,22 @@ func (m *DocumentsModule) SaveRetentionRule(ctx context.Context, tenantID, docTy
 }
 
 func (m *DocumentsModule) listRetentionRulesHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	list, err := m.ListRetentionRules(r.Context(), tenantID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to fetch retention rules")
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch retention rules")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 func (m *DocumentsModule) saveRetentionRuleHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -215,7 +213,7 @@ func (m *DocumentsModule) saveRetentionRuleHandler(w http.ResponseWriter, r *htt
 		Note        string `json:"note"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid retention rule payload")
+		httpx.Error(w, http.StatusBadRequest, "invalid retention rule payload")
 		return
 	}
 
@@ -224,5 +222,5 @@ func (m *DocumentsModule) saveRetentionRuleHandler(w http.ResponseWriter, r *htt
 		writeWriteFailure(r.Context(), w, err, "failed to save the retention rule")
 		return
 	}
-	writeJSON(w, http.StatusOK, saved)
+	httpx.JSON(w, http.StatusOK, saved)
 }

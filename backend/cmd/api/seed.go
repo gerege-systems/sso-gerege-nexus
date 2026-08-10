@@ -54,7 +54,31 @@ const (
 	demoRoleID   = "00000000-0000-0000-0000-000000000003"
 	demoEmail    = "admin@example.com"
 	demoPassword = "Password123!"
+
+	// A second organisation for the same person, because one is not enough to
+	// exercise anything: the tenant switcher, the row-level isolation and the
+	// per-tenant permission set all behave identically on a single-tenant
+	// deployment and identically wrongly if they are broken. Its ids are fixed
+	// for the same reason the demo tenant's are — a seeder that ran twice must
+	// not leave two of it.
+	secondTenantID = "00000000-0000-0000-0000-000000000004"
+	secondRoleID   = "00000000-0000-0000-0000-000000000005"
 )
+
+// demoTenants are seeded in order, and the first is the one a demo sign-in
+// lands in: login picks the oldest membership.
+var demoTenants = []struct {
+	id     string
+	slug   string
+	name   string
+	roleID string
+	// The apps installed for this tenant. They differ deliberately — after
+	// switching, the sidebar and the app rail must visibly be somebody else's.
+	apps []string
+}{
+	{demoTenantID, "demo", "Demo Corporation", demoRoleID, []string{"contacts", "products", "inventory", "documents"}},
+	{secondTenantID, "demo-trade", "Demo Trade LLC", secondRoleID, []string{"contacts", "billing"}},
+}
 
 // seedingEnabled reports whether the documented demo account should be
 // created. The account has a published password, so it is never seeded into a
@@ -69,50 +93,93 @@ func seedingEnabled() bool {
 	return !config.IsProduction()
 }
 
-// seedInitialData creates the demo tenant, admin user, and admin role if they
-// are missing. Every statement is idempotent, so it is safe on every boot.
-func seedInitialData(ctx context.Context, db *pgxpool.Pool) {
+// appIntaller is what the seeder needs from the platform server: the catalogue
+// has to be in the apps table before an installation row can reference it, and
+// that is done while the server is built.
+type appInstaller interface {
+	InstallAppForTenant(ctx context.Context, tenantID, appSlug, userID string) error
+}
+
+// seedInitialData creates the demo tenants, the admin user, their admin roles
+// and the apps each tenant runs, if they are missing. Every statement is
+// idempotent, so it is safe on every boot.
+func seedInitialData(ctx context.Context, db *pgxpool.Pool, installer appInstaller) {
 	if !seedingEnabled() {
 		return
 	}
 
-	tenantID := demoTenantID
-	err := db.QueryRow(ctx, `SELECT id::text FROM tenants WHERE slug = 'demo'`).Scan(&tenantID)
+	userID, err := ensureDemoUser(ctx, db)
 	if err != nil {
-		if _, err := db.Exec(ctx,
-			`INSERT INTO tenants (id, slug, name) VALUES ($1, 'demo', 'Demo Corporation')
-			 ON CONFLICT (slug) DO NOTHING`, demoTenantID); err != nil {
-			slog.Error("failed to seed demo tenant", "error", err)
-			return
-		}
-		tenantID = demoTenantID
+		slog.Error("failed to seed the demo account", "error", err)
+		return
 	}
 
+	for _, want := range demoTenants {
+		tenantID, err := ensureTenant(ctx, db, want.id, want.slug, want.name)
+		if err != nil {
+			slog.Error("failed to seed tenant", "slug", want.slug, "error", err)
+			continue
+		}
+		ensureDemoMembership(ctx, db, tenantID, userID, want.roleID)
+		for _, slug := range want.apps {
+			// An app already installed is updated in place by the installer, so
+			// this stays idempotent; a failure is logged and the rest continue,
+			// because a demo missing one app is better than a boot that stops.
+			if err := installer.InstallAppForTenant(ctx, tenantID, slug, userID); err != nil {
+				slog.Warn("failed to install demo app", "tenant", want.slug, "app", slug, "error", err)
+			}
+		}
+	}
+	slog.Info("seeded demo account", "email", demoEmail, "tenants", len(demoTenants))
+}
+
+// ensureTenant returns the id of the tenant with this slug, creating it at the
+// fixed id when it is not there. The slug is what identifies it, not the id: a
+// deployment that once created the tenant by hand keeps the row it has.
+func ensureTenant(ctx context.Context, db *pgxpool.Pool, id, slug, name string) (string, error) {
+	var existing string
+	if err := db.QueryRow(ctx, `SELECT id::text FROM tenants WHERE slug = $1`, slug).Scan(&existing); err == nil {
+		return existing, nil
+	}
+	if _, err := db.Exec(ctx,
+		`INSERT INTO tenants (id, slug, name) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING`,
+		id, slug, name); err != nil {
+		return "", err
+	}
+	var created string
+	if err := db.QueryRow(ctx, `SELECT id::text FROM tenants WHERE slug = $1`, slug).Scan(&created); err != nil {
+		return "", err
+	}
+	return created, nil
+}
+
+func ensureDemoUser(ctx context.Context, db *pgxpool.Pool) (string, error) {
 	var userID string
 	if err := db.QueryRow(ctx, `SELECT id::text FROM users WHERE email = $1`, demoEmail).Scan(&userID); err == nil {
-		ensureDemoMembership(ctx, db, tenantID, userID)
-		return
+		return userID, nil
 	}
 
 	passHash, err := auth.HashPassword(demoPassword)
 	if err != nil {
-		slog.Error("failed to hash demo password", "error", err)
-		return
+		return "", err
 	}
-
 	if _, err := db.Exec(ctx,
 		`INSERT INTO users (id, email, password_hash, name, is_admin)
-		 VALUES ($1, $2, $3, 'System Admin', TRUE)
+		 VALUES ($1, $2, $3, 'System Admin', FALSE)
 		 ON CONFLICT (email) DO NOTHING`, demoUserID, demoEmail, passHash); err != nil {
-		slog.Error("failed to seed admin user", "error", err)
-		return
+		return "", err
 	}
-
-	ensureDemoMembership(ctx, db, tenantID, demoUserID)
-	slog.Info("seeded demo account", "email", demoEmail, "tenant", "demo")
+	if err := db.QueryRow(ctx, `SELECT id::text FROM users WHERE email = $1`, demoEmail).Scan(&userID); err != nil {
+		return "", err
+	}
+	return userID, nil
 }
 
-func ensureDemoMembership(ctx context.Context, db *pgxpool.Pool, tenantID, userID string) {
+// ensureDemoMembership puts the user in the tenant and makes them its
+// administrator. roleID is a parameter rather than a constant because roles are
+// per-tenant rows: seeding a second tenant with the first one's role id fails
+// on the primary key, which is not the conflict the ON CONFLICT below covers.
+func ensureDemoMembership(ctx context.Context, db *pgxpool.Pool, tenantID, userID, roleID string) {
 	if _, err := db.Exec(ctx,
 		`INSERT INTO memberships (tenant_id, user_id) VALUES ($1, $2)
 		 ON CONFLICT (tenant_id, user_id) DO NOTHING`, tenantID, userID); err != nil {
@@ -122,25 +189,25 @@ func ensureDemoMembership(ctx context.Context, db *pgxpool.Pool, tenantID, userI
 
 	if _, err := db.Exec(ctx,
 		`INSERT INTO roles (id, tenant_id, code, name) VALUES ($1, $2, 'admin', 'Tenant Admin')
-		 ON CONFLICT (tenant_id, code) DO NOTHING`, demoRoleID, tenantID); err != nil {
+		 ON CONFLICT (tenant_id, code) DO NOTHING`, roleID, tenantID); err != nil {
 		slog.Error("failed to seed admin role", "error", err)
 		return
 	}
 
-	var membershipID, roleID string
+	var membershipID, adminRoleID string
 	if err := db.QueryRow(ctx,
 		`SELECT id::text FROM memberships WHERE tenant_id = $1 AND user_id = $2`,
 		tenantID, userID).Scan(&membershipID); err != nil {
 		return
 	}
 	if err := db.QueryRow(ctx,
-		`SELECT id::text FROM roles WHERE tenant_id = $1 AND code = 'admin'`, tenantID).Scan(&roleID); err != nil {
+		`SELECT id::text FROM roles WHERE tenant_id = $1 AND code = 'admin'`, tenantID).Scan(&adminRoleID); err != nil {
 		return
 	}
 
 	if _, err := db.Exec(ctx,
 		`INSERT INTO membership_roles (membership_id, role_id) VALUES ($1, $2)
-		 ON CONFLICT DO NOTHING`, membershipID, roleID); err != nil {
+		 ON CONFLICT DO NOTHING`, membershipID, adminRoleID); err != nil {
 		slog.Error("failed to grant admin role", "error", err)
 	}
 }

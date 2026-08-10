@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronDown, LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
 import { LOCALES, TranslationKey, useI18n } from "@/lib/i18n";
 import { ColorMode, useTheme } from "@/lib/theme";
+import { TenantChoices, useTenants } from "@/components/TenantChoices";
 
 const MODES: { value: ColorMode; icon: typeof Sun; labelKey: TranslationKey }[] = [
   { value: "light", icon: Sun, labelKey: "appearance.mode.light" },
@@ -21,7 +22,7 @@ export default function UserMenu({
   user,
   onLogout,
 }: {
-  user: { name?: string; email?: string } | null;
+  user: { name?: string; email?: string; tenant_id?: string } | null;
   onLogout: () => void;
 }) {
   const { t, locale, setLocale, availableLocales } = useI18n();
@@ -29,6 +30,9 @@ export default function UserMenu({
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // The brand mark in the header offers the same list, but the mobile shell
+  // hides the brand — this is the only way to change organisation on a phone.
+  const { tenants, switching, failed, switchTo } = useTenants(open);
 
   // Close on an outside click or Escape, the way a menu is expected to behave.
   useEffect(() => {
@@ -78,6 +82,25 @@ export default function UserMenu({
             <p className="text-sm font-semibold text-slate-900 truncate">{user?.name}</p>
             <p className="text-xs text-slate-500 truncate">{user?.email}</p>
           </div>
+
+          {/* Only when there is a choice to make. A list of one would be a
+              third line of chrome in a menu that already carries two, saying
+              nothing the header does not already show. */}
+          {tenants && tenants.length > 1 && (
+            <div className="py-1.5 border-b border-slate-100">
+              <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                {t("web.view.tenants")}
+              </p>
+              <TenantChoices
+                current={user?.tenant_id}
+                tenants={tenants}
+                switching={switching}
+                failed={failed}
+                onChoose={(id) => void switchTo(id)}
+                onStay={() => setOpen(false)}
+              />
+            </div>
+          )}
 
           <div className="py-1.5 border-b border-slate-100">
             <Link

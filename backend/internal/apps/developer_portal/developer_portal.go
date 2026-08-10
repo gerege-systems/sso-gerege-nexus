@@ -22,6 +22,7 @@ import (
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/ssoprovider"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
@@ -54,7 +55,7 @@ func (m *DeveloperPortalModule) Permissions() []internal.PermissionDefinition {
 
 func (m *DeveloperPortalModule) Menus() []internal.MenuDefinition {
 	return []internal.MenuDefinition{
-		{ID: "developer_apps", ParentID: "platform_tools", Label: "Developer Apps", Path: "/developer/apps", Icon: "code", Order: 10, Labels: map[string]string{"mn": "Хөгжүүлэгчийн аппууд"}},
+		{ID: "developer_apps", ParentID: "platform_tools", Label: "Developer Apps", Path: "/developer/apps", Icon: "code", Order: 10, Labels: map[string]string{"mn": "Хөгжүүлэгчийн аппууд", "ar": "تطبيقات المطورين", "zh": "开发者应用", "fr": "Applications développeur", "ru": "Приложения разработчика", "es": "Aplicaciones de desarrollador"}},
 	}
 }
 
@@ -92,38 +93,36 @@ func (m *DeveloperPortalModule) RegisterRoutes(r chi.Router, tenantAuthMiddlewar
 // away, and then called a provider method that returned every client on the
 // platform — so any tenant could enumerate every other tenant's integrations.
 func (m *DeveloperPortalModule) handleListApps(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	clients, err := m.sso.Store().ListClients(r.Context(), tenantID)
 	if err != nil {
 		slog.Error("failed to list oauth2 clients", "error", err, "tenant_id", tenantID)
-		writeError(w, http.StatusInternalServerError, "could not load applications")
+		httpx.Error(w, http.StatusInternalServerError, "could not load applications")
 		return
 	}
-	writeJSON(w, http.StatusOK, clients)
+	httpx.JSON(w, http.StatusOK, clients)
 }
 
 func (m *DeveloperPortalModule) handleGetApp(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	client, err := m.sso.Store().GetTenantClient(r.Context(), tenantID, chi.URLParam(r, "clientID"))
 	if errors.Is(err, ssoprovider.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "application not found")
+		httpx.Error(w, http.StatusNotFound, "application not found")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not load the application")
+		httpx.Error(w, http.StatusInternalServerError, "could not load the application")
 		return
 	}
-	writeJSON(w, http.StatusOK, client)
+	httpx.JSON(w, http.StatusOK, client)
 }
 
 // appRequest is the create/update payload.
@@ -139,22 +138,21 @@ type appRequest struct {
 }
 
 func (m *DeveloperPortalModule) handleCreateApp(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 	claims, _ := auth.UserFromContext(r.Context())
 
 	var req appRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid payload")
+		httpx.Error(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
 	normalised, verr := normalise(&req)
 	if verr != nil {
-		writeError(w, http.StatusBadRequest, verr.Error())
+		httpx.Error(w, http.StatusBadRequest, verr.Error())
 		return
 	}
 
@@ -182,36 +180,35 @@ func (m *DeveloperPortalModule) handleCreateApp(w http.ResponseWriter, r *http.R
 	created, err := m.sso.Store().CreateClient(r.Context(), client, secretHash, claims.UserID)
 	if err != nil {
 		slog.Error("failed to create an oauth2 client", "error", err, "tenant_id", tenantID)
-		writeError(w, http.StatusInternalServerError, "could not register the application")
+		httpx.Error(w, http.StatusInternalServerError, "could not register the application")
 		return
 	}
 
 	// The only time the secret is ever readable. Every later read redacts it,
 	// because the database holds a digest and cannot reproduce it.
 	created.Secret = secret
-	writeJSON(w, http.StatusCreated, created)
+	httpx.JSON(w, http.StatusCreated, created)
 }
 
 func (m *DeveloperPortalModule) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	existing, err := m.sso.Store().GetTenantClient(r.Context(), tenantID, chi.URLParam(r, "clientID"))
 	if errors.Is(err, ssoprovider.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "application not found")
+		httpx.Error(w, http.StatusNotFound, "application not found")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not load the application")
+		httpx.Error(w, http.StatusInternalServerError, "could not load the application")
 		return
 	}
 
 	var req appRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid payload")
+		httpx.Error(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	// The client type is fixed at registration: flipping a public client to
@@ -221,7 +218,7 @@ func (m *DeveloperPortalModule) handleUpdateApp(w http.ResponseWriter, r *http.R
 
 	normalised, verr := normalise(&req)
 	if verr != nil {
-		writeError(w, http.StatusBadRequest, verr.Error())
+		httpx.Error(w, http.StatusBadRequest, verr.Error())
 		return
 	}
 
@@ -236,26 +233,25 @@ func (m *DeveloperPortalModule) handleUpdateApp(w http.ResponseWriter, r *http.R
 	updated, err := m.sso.Store().UpdateClient(r.Context(), tenantID, existing)
 	if err != nil {
 		slog.Error("failed to update an oauth2 client", "error", err)
-		writeError(w, http.StatusInternalServerError, "could not update the application")
+		httpx.Error(w, http.StatusInternalServerError, "could not update the application")
 		return
 	}
-	writeJSON(w, http.StatusOK, updated)
+	httpx.JSON(w, http.StatusOK, updated)
 }
 
 func (m *DeveloperPortalModule) handleDeleteApp(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
-	err = m.sso.Store().DeleteClient(r.Context(), tenantID, chi.URLParam(r, "clientID"))
+	err := m.sso.Store().DeleteClient(r.Context(), tenantID, chi.URLParam(r, "clientID"))
 	if errors.Is(err, ssoprovider.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "application not found")
+		httpx.Error(w, http.StatusNotFound, "application not found")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not delete the application")
+		httpx.Error(w, http.StatusInternalServerError, "could not delete the application")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -265,36 +261,35 @@ func (m *DeveloperPortalModule) handleDeleteApp(w http.ResponseWriter, r *http.R
 // was no way to do this before: a leaked secret meant deleting the integration
 // and re-registering it under a new client_id.
 func (m *DeveloperPortalModule) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	clientID := chi.URLParam(r, "clientID")
 	client, err := m.sso.Store().GetTenantClient(r.Context(), tenantID, clientID)
 	if errors.Is(err, ssoprovider.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "application not found")
+		httpx.Error(w, http.StatusNotFound, "application not found")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not load the application")
+		httpx.Error(w, http.StatusInternalServerError, "could not load the application")
 		return
 	}
 	if client.IsPublic() {
-		writeError(w, http.StatusBadRequest, "a public client has no secret to rotate")
+		httpx.Error(w, http.StatusBadRequest, "a public client has no secret to rotate")
 		return
 	}
 
 	secret := "sec_" + ssoprovider.NewIdentifier(48)
 	if err := m.sso.Store().RotateClientSecret(r.Context(), tenantID, clientID, ssoprovider.HashSecret(secret)); err != nil {
 		slog.Error("failed to rotate a client secret", "error", err)
-		writeError(w, http.StatusInternalServerError, "could not rotate the secret")
+		httpx.Error(w, http.StatusInternalServerError, "could not rotate the secret")
 		return
 	}
 
 	client.Secret = secret
-	writeJSON(w, http.StatusOK, client)
+	httpx.JSON(w, http.StatusOK, client)
 }
 
 // handleAudit reports what this tenant's clients are actually doing: live
@@ -304,70 +299,67 @@ func (m *DeveloperPortalModule) handleRotateSecret(w http.ResponseWriter, r *htt
 // consent nobody remembers granting is the one worth withdrawing; neither was
 // visible anywhere before.
 func (m *DeveloperPortalModule) handleAudit(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	activity, err := m.sso.Store().ClientActivityByTenant(r.Context(), tenantID)
 	if err != nil {
 		slog.Error("failed to load oauth2 client activity", "error", err, "tenant_id", tenantID)
-		writeError(w, http.StatusInternalServerError, "could not load activity")
+		httpx.Error(w, http.StatusInternalServerError, "could not load activity")
 		return
 	}
 	consents, err := m.sso.Store().ConsentsByTenant(r.Context(), tenantID, 200)
 	if err != nil {
 		slog.Error("failed to load oauth2 consents", "error", err, "tenant_id", tenantID)
-		writeError(w, http.StatusInternalServerError, "could not load consents")
+		httpx.Error(w, http.StatusInternalServerError, "could not load consents")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"clients": activity, "consents": consents})
+	httpx.JSON(w, http.StatusOK, map[string]any{"clients": activity, "consents": consents})
 }
 
 // handleRevokeTokens invalidates every live token a client holds without
 // deleting the registration, so a suspected leak can be contained while the
 // integration keeps its client_id.
 func (m *DeveloperPortalModule) handleRevokeTokens(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	clientID := chi.URLParam(r, "clientID")
 	if _, err := m.sso.Store().GetTenantClient(r.Context(), tenantID, clientID); err != nil {
-		writeError(w, http.StatusNotFound, "application not found")
+		httpx.Error(w, http.StatusNotFound, "application not found")
 		return
 	}
 
 	revoked, err := m.sso.Store().RevokeClientTokens(r.Context(), tenantID, clientID)
 	if err != nil {
 		slog.Error("failed to revoke client tokens", "error", err, "client_id", clientID)
-		writeError(w, http.StatusInternalServerError, "could not revoke tokens")
+		httpx.Error(w, http.StatusInternalServerError, "could not revoke tokens")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"revoked": revoked})
+	httpx.JSON(w, http.StatusOK, map[string]any{"revoked": revoked})
 }
 
 // handleWithdrawConsent removes one user's standing grant to a client.
 func (m *DeveloperPortalModule) handleWithdrawConsent(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		unauthorized(w)
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
-	err = m.sso.Store().WithdrawConsent(r.Context(), tenantID,
+	err := m.sso.Store().WithdrawConsent(r.Context(), tenantID,
 		chi.URLParam(r, "clientID"), chi.URLParam(r, "userID"))
 	if errors.Is(err, ssoprovider.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "consent not found")
+		httpx.Error(w, http.StatusNotFound, "consent not found")
 		return
 	}
 	if err != nil {
 		slog.Error("failed to withdraw consent", "error", err)
-		writeError(w, http.StatusInternalServerError, "could not withdraw the consent")
+		httpx.Error(w, http.StatusInternalServerError, "could not withdraw the consent")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -377,18 +369,17 @@ func (m *DeveloperPortalModule) handleWithdrawConsent(w http.ResponseWriter, r *
 // which kid their library should be pinning and when it appeared. Only public
 // metadata: the query never selects the private half.
 func (m *DeveloperPortalModule) handleSigningKeys(w http.ResponseWriter, r *http.Request) {
-	if _, err := tenant.FromContext(r.Context()); err != nil {
-		unauthorized(w)
+	if _, ok := tenant.Require(w, r); !ok {
 		return
 	}
 
 	keys, err := m.sso.Store().SigningKeys(r.Context())
 	if err != nil {
 		slog.Error("failed to load signing keys", "error", err)
-		writeError(w, http.StatusInternalServerError, "could not load signing keys")
+		httpx.Error(w, http.StatusInternalServerError, "could not load signing keys")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.JSON(w, http.StatusOK, map[string]any{
 		"keys":     keys,
 		"jwks_uri": m.sso.Issuer() + "/.well-known/jwks.json",
 	})
@@ -397,7 +388,7 @@ func (m *DeveloperPortalModule) handleSigningKeys(w http.ResponseWriter, r *http
 // handleListScopes gives the portal's scope picker the same vocabulary the
 // consent screen renders, so the two cannot drift.
 func (m *DeveloperPortalModule) handleListScopes(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.JSON(w, http.StatusOK, map[string]any{
 		"scopes":      ssoprovider.SupportedScopes,
 		"grant_types": ssoprovider.SupportedGrantTypes,
 	})
@@ -407,7 +398,7 @@ func (m *DeveloperPortalModule) handleListScopes(w http.ResponseWriter, r *http.
 // into their client library, rather than making them assemble the origin.
 func (m *DeveloperPortalModule) handleEndpoints(w http.ResponseWriter, r *http.Request) {
 	issuer := m.sso.Issuer()
-	writeJSON(w, http.StatusOK, map[string]string{
+	httpx.JSON(w, http.StatusOK, map[string]string{
 		"issuer":                 issuer,
 		"discovery":              issuer + "/.well-known/openid-configuration",
 		"jwks_uri":               issuer + "/.well-known/jwks.json",
@@ -462,7 +453,6 @@ func normalise(req *appRequest) (*appRequest, error) {
 			return nil, errors.New("unknown scope: " + scope)
 		}
 	}
-
 	out.RedirectURIs = dedupe(req.RedirectURIs)
 	if slices.Contains(out.GrantTypes, "authorization_code") && len(out.RedirectURIs) == 0 {
 		return nil, errors.New("authorization_code requires at least one redirect_uri")
@@ -500,10 +490,16 @@ func validateRedirectURI(raw, clientType string) error {
 	if strings.Contains(raw, "*") {
 		return errors.New("wildcards are not allowed in a redirect_uri: " + raw)
 	}
+	// Credentials in the URI are never part of a callback anyone means to
+	// register, and they would be handed to whoever reads the browser's history.
+	if parsed.User != nil {
+		return errors.New("redirect_uri must not carry userinfo: " + raw)
+	}
 
 	switch parsed.Scheme {
 	case "https":
-		return nil
+		// The operator's host allowlist, when they have set one.
+		return ssoprovider.ValidateRedirectURI(raw)
 	case "http":
 		// Plain HTTP is only ever safe on the loopback interface, which is how
 		// native apps and local development receive the redirect.
@@ -550,18 +546,4 @@ func slugify(name string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
-}
-
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
-func unauthorized(w http.ResponseWriter) {
-	writeError(w, http.StatusUnauthorized, "unauthorized tenant context")
 }

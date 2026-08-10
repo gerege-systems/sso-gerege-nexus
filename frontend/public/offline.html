@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="mn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Сүлжээгүй байна — Gerege Nexus</title>
+    <!--
+      Deliberately one file with no bundle behind it. This is what renders when
+      nothing else can, so it cannot depend on the app booting, on a font
+      arriving, or on a stylesheet that may not be in the cache either.
+
+      Both languages appear at once rather than being switched between: the
+      chooser lives in the app, and the app is what is unavailable.
+    -->
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #f9fafc;
+        color: #0f172a;
+        padding: 24px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #080c14; color: #e2e8f0; }
+        main { background: #0e1626 !important; border-color: #1e2a3d !important; }
+        p { color: #94a3b8 !important; }
+      }
+      main {
+        max-width: 420px;
+        text-align: center;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 40px 32px;
+      }
+      img { width: 72px; height: 72px; margin-bottom: 20px; }
+      h1 { font-size: 19px; margin: 0 0 10px; }
+      p { color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 6px; }
+      button {
+        margin-top: 22px;
+        border: 0;
+        border-radius: 9px;
+        background: #1869eb;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 11px 22px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/icons/app-192.png" alt="" />
+      <h1>Сүлжээнд холбогдож чадсангүй</h1>
+      <p>Gerege Nexus-д хандахын тулд интернэт холболт шаардлагатай.</p>
+      <p>Gerege Nexus needs a connection. Check yours and try again.</p>
+      <button type="button" onclick="location.reload()">Дахин оролдох · Retry</button>
+    </main>
+  </body>
+</html>

@@ -1,7 +1,6 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
 
 async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("session_token") : null;
   // Server-owned content (menu labels, app store copy) is translated by the
   // API, so every request carries the locale the user picked.
   const locale = typeof window !== "undefined" ? window.localStorage.getItem("locale") || "mn" : "mn";
@@ -10,10 +9,6 @@ async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
     "Accept-Language": locale,
     ...(options.headers as Record<string, string>),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
   const res = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers,
@@ -55,16 +50,95 @@ async function mutateApp(url: string) {
   return result;
 }
 
+export type IntegrationProvider =
+  | "webhook"
+  | "government"
+  | "payment"
+  | "custom_rest"
+  | "google_drive"
+  | "dropbox"
+  | "google_meet";
+
+export interface Integration {
+  id: string;
+  provider: IntegrationProvider;
+  name: string;
+  target_url: string;
+  /** The administrator's intent. A failure is reported in last_error and does
+   *  not switch the connector off. */
+  status: "ACTIVE" | "INACTIVE";
+  config: Record<string, string>;
+  account_label: string;
+  /** True once an OAuth grant is stored. The token itself never comes back. */
+  connected: boolean;
+  connected_at?: string;
+  last_ping_at?: string;
+  last_error?: string;
+  capabilities: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Email verification — proving an address, through the hosted service.
+ *
+ * The platform holds no mailbox credential and issues no keys of its own: it
+ * asks the verification service for a link and finds out when the person came
+ * back. The service key is a server-side secret and never reaches this code.
+ */
+export interface EmailVerification {
+  id: string;
+  /** Who asked: an app module id, or "portal". */
+  source: string;
+  purpose?: string;
+  email: string;
+  redirect_url?: string;
+  status: "PENDING" | "VERIFIED" | "EXPIRED";
+  expires_at: string;
+  verified_at?: string;
+  created_at: string;
+}
+
+export interface EmailVerifyOverview {
+  stats: {
+    total: number;
+    verified: number;
+    pending: number;
+    expired: number;
+    last_24h: number;
+    verified_pct: number;
+  };
+  recent: EmailVerification[];
+  /** Whether a service key is present at all. The key itself never comes back. */
+  configured: boolean;
+  /** The service's own health check, and what it said when it failed. */
+  reachable: boolean;
+  health?: string;
+  provider_url: string;
+  admin_url: string;
+  return_url: string;
+}
+
+export interface IntegrationInput {
+  provider: IntegrationProvider;
+  name: string;
+  target_url?: string;
+  /** Write-only. Left blank on an update it means "unchanged", not "clear it". */
+  secret_key?: string;
+  status?: string;
+  config?: Record<string, string>;
+}
+
 export const api = {
   // Auth
   login: (email: string, password: string) =>
-    fetcher<{ token: string; user: any }>("/auth/login", {
+    fetcher<{ expires_at: string; user: any }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
 
   loginWithEID: (code?: string, redirectURI?: string, regNumber?: string, otpCode?: string, authMethod?: string) =>
-    fetcher<{ token: string; user: any; identity: any }>("/auth/eid/login", {
+    fetcher<{ expires_at: string; user: any; identity: any }>("/auth/eid/login", {
       method: "POST",
       body: JSON.stringify({ code, redirect_uri: redirectURI, reg_number: regNumber, otp_code: otpCode, auth_method: authMethod }),
     }),
@@ -73,10 +147,10 @@ export const api = {
   startEIDByNationalID: (nationalId:string,callbackUrl = "") => fetcher<{session_id:string;device_link_url?:string;verification_code:string;expires_at:string}>("/auth/eid/start-id",{method:"POST",body:JSON.stringify({national_id:nationalId,callbackUrl})}),
   // The poll is a long poll the API holds open for up to 25s, so the caller
   // passes a signal to drop it the moment the citizen cancels or leaves.
-  pollEID: (sessionId:string,signal?:AbortSignal) => fetcher<{state:string;token?:string;identity?:any}>("/auth/eid/poll",{method:"POST",body:JSON.stringify({session_id:sessionId}),signal}),
+  pollEID: (sessionId:string,signal?:AbortSignal) => fetcher<{state:string;expires_at?:string;identity?:any}>("/auth/eid/poll",{method:"POST",body:JSON.stringify({session_id:sessionId}),signal}),
 
   loginWithDAN: (danToken?: string, regNumber?: string, otpCode?: string) =>
-    fetcher<{ token: string; user: any; dan_profile: any }>("/auth/dan/login", {
+    fetcher<{ expires_at: string; user: any; dan_profile: any }>("/auth/dan/login", {
       method: "POST",
       body: JSON.stringify({ dan_token: danToken, reg_number: regNumber, otp_code: otpCode }),
     }),
@@ -86,6 +160,20 @@ export const api = {
   // permissions carries the effective grant of every role the member holds; it
   // is empty for administrators, who bypass the check.
   getMe: () => fetcher<{ id: string; tenant_id: string; tenant_name: string; name: string; email: string; is_admin: boolean; permissions?: string[] }>("/auth/me"),
+
+  // The organisations the signed-in person may act for. A membership in one is
+  // the common case, so callers should expect a list of one rather than treat
+  // it as an error.
+  getTenants: () => fetcher<{ current: string; tenants: Array<{ id: string; name: string; slug: string }> }>("/auth/tenants"),
+
+  // Moves the session to another of them. The server rotates the token and
+  // re-sets the cookie, so everything fetched before this call belongs to the
+  // tenant just left — the caller reloads rather than patching state.
+  switchTenant: (tenantId: string) =>
+    fetcher<{ tenant_id: string; switched: boolean; expires_at?: string }>("/auth/switch-tenant", {
+      method: "POST",
+      body: JSON.stringify({ tenant_id: tenantId }),
+    }),
 
   getMenus: () => fetcher<Array<{ id: string; app_id?: string; app_name?: string; parent_id?: string; label: string; path?: string; icon: string; order: number }>>("/menus"),
 
@@ -291,21 +379,70 @@ export const api = {
       body: JSON.stringify({ company_reg: companyReg }),
     }),
 
-  // External Integrations Manager
-  getIntegrations: () =>
+  // External Integrations Manager.
+  //
+  // Connectors are per tenant and stored server-side; the secret and any OAuth
+  // grant are write-only, so nothing here ever reads a credential back.
+  getIntegrations: () => fetcher<Integration[]>("/integrations"),
+
+  // Which providers this deployment can actually offer. A provider whose OAuth
+  // client was never configured comes back unavailable with the reason, so the
+  // screen can say why instead of showing a form that cannot work.
+  getIntegrationProviders: () =>
+    fetcher<{
+      providers: Array<{
+        provider: IntegrationProvider;
+        oauth: boolean;
+        capabilities: string[];
+        available: boolean;
+        reason?: string;
+      }>;
+      encryption_configured: boolean;
+      redirect_uri: string;
+    }>("/integrations/providers"),
+
+  registerIntegration: (data: IntegrationInput) =>
+    fetcher<Integration>("/integrations", { method: "POST", body: JSON.stringify(data) }),
+
+  updateIntegration: (id: string, data: IntegrationInput) =>
+    fetcher<Integration>(`/integrations/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
+  deleteIntegration: (id: string) =>
+    fetcher<{ status: string }>(`/integrations/${id}`, { method: "DELETE" }),
+
+  // Starts the OAuth grant. The answer is the provider URL to send the
+  // administrator to; the callback lands back on the settings screen.
+  connectIntegration: (id: string) =>
+    fetcher<{ authorization_url: string }>(`/integrations/${id}/connect`, { method: "POST" }),
+
+  disconnectIntegration: (id: string) =>
+    fetcher<{ status: string }>(`/integrations/${id}/disconnect`, { method: "POST" }),
+
+  // What has recently left the platform. A signed document reaching an outside
+  // account is a disclosure, and this is the record of it.
+  getIntegrationDeliveries: (limit = 50) =>
     fetcher<
       Array<{
         id: string;
-        name: string;
-        type: string;
-        target_url: string;
-        status: string;
-        last_ping_at: string;
+        integration_id: string;
+        kind: string;
+        reference: string;
+        outcome: "OK" | "FAILED";
+        detail?: string;
+        external_id?: string;
+        external_url?: string;
+        created_at: string;
       }>
-    >("/integrations"),
+    >(`/integrations/deliveries?limit=${limit}`),
 
-  registerIntegration: (data: { name: string; type: string; target_url: string; secret_key?: string }) =>
-    fetcher("/integrations", { method: "POST", body: JSON.stringify(data) }),
+  // Send an already-signed document to a storage connector. Automatic export
+  // covers documents signed after a connector was set up; this covers the ones
+  // signed before it, and the retry after a destination was unreachable.
+  exportEsignDocument: (id: string, integrationId?: string) =>
+    fetcher<{ exported: Array<{ integration_name: string; provider: string; url?: string }> }>(
+      `/esign/documents/${id}/export`,
+      { method: "POST", body: JSON.stringify(integrationId ? { integration_id: integrationId } : {}) }
+    ),
 
   // Billing App (io.example.billing)
   getInvoices: () =>
@@ -376,6 +513,11 @@ export const api = {
       offset: number;
     }>(`/documents${suffix}`);
   },
+
+  // A title can be corrected until the first signature; after that it is what the
+  // citizen read on their own device before approving.
+  renameDocument: (id: string, title: string) =>
+    fetcher(`/documents/${id}/title`, { method: "PUT", body: JSON.stringify({ title }) }),
 
   createDocument: (data: { title: string; doc_type: string }) =>
     fetcher("/documents", { method: "POST", body: JSON.stringify(data) }),
@@ -557,16 +699,25 @@ export const api = {
     >("/esign/logs"),
 
   downloadEsignDocument: async (id: string, variant: "original" | "signed"): Promise<Blob> => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("session_token") : null;
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
     const res = await fetch(`${API_BASE}/esign/documents/${id}/download?variant=${variant}`, {
-      headers,
       credentials: "include",
     });
     if (!res.ok) throw new Error("Download failed");
     return res.blob();
   },
+
+  // Email verification.
+  //
+  // There is no key management here any more: keys belong to the sending
+  // service and are administered there. What this platform keeps is the record
+  // of what it asked for.
+  getEmailVerifyOverview: (limit = 25) =>
+    fetcher<EmailVerifyOverview>(`/admin/email-verification/overview?limit=${limit}`),
+
+  // Ask the service for a link. App modules call the Go service directly; this
+  // is for the product's own screens.
+  sendEmailVerification: (data: { email: string; redirect_url?: string; purpose?: string }) =>
+    fetcher<EmailVerification>("/verify/send", { method: "POST", body: JSON.stringify(data) }),
 
   // Developer Portal & OAuth2 SSO Apps
   //

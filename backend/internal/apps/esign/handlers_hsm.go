@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/gerege"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/go-chi/chi/v5"
 )
 
 func (m *Module) checkCertHandler(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +77,7 @@ func (m *Module) checkCertHandler(w http.ResponseWriter, r *http.Request) {
 		"civil_id": req.CivilID,
 	})
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.JSON(w, http.StatusOK, map[string]any{
 		"is_valid":    cert.IsValid,
 		"given_name":  cert.SubjectDN.GivenName,
 		"surname":     cert.SubjectDN.Surname,
@@ -212,7 +212,11 @@ func (m *Module) signDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		"page_number": page, "provider": ProviderHSM,
 	})
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	// File the signed PDF with whatever the tenant has connected. The signature
+	// is already stored, so this must not be able to fail the response.
+	m.exportSignedDocument(r.Context(), tenantID, id, title, signed)
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
 		"status":      StatusSigned,
 		"document_id": id,
 		"signed_at":   now,

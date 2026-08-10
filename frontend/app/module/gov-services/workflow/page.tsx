@@ -4,7 +4,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { GovService, OrgUnit, RoutingRule, RoutingStrategy, Workflow, WorkflowTemplate, gov } from "@/lib/gov";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
-import { Banner, Loading, PageHeader, describeError } from "@/components/gov/shared";
+import { Banner, Loading, PageHeader } from "@/components/ui";
+import { describeError } from "@/components/gov/shared";
 import { Building2, Route, Workflow as WorkflowIcon } from "lucide-react";
 
 const STRATEGIES: RoutingStrategy[] = ["SELF", "PARENT", "CHILD", "SPECIFIC_UNIT", "REGION_MATCH"];

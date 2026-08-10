@@ -1,0 +1,514 @@
+/*
+ * Gerege SSO
+ * Copyright (c) 2026 Gerege Systems Development Team, @craftzbay, Gemini AI & Claude AI
+ * Distributed under the Apache 2.0 License.
+ *
+ * Package platform provides the core HTTP Server orchestrator, routing table,
+ * authentication middleware, and app installer wiring.
+ */
+
+package platform
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eid"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eidmongolia"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/security"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/time/rate"
+)
+
+const (
+	maxLoginBody       = 8 << 10
+	maxLoginFailures   = 5
+	loginLockoutWindow = 15 * time.Minute
+)
+
+var dummyPasswordHash = func() string {
+	hash, err := auth.HashPassword("constant-time-missing-user-placeholder")
+	if err != nil {
+		panic(err)
+	}
+	return hash
+}()
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" || req.Password == "" {
+		httpx.Error(w, http.StatusBadRequest, "invalid login credentials")
+		return
+	}
+
+	// A user can hold memberships in several tenants. LIMIT 1 without an ORDER
+	// BY let Postgres pick, so the same credentials could land in a different
+	// tenant from one sign-in to the next — and the session, its audit trail
+	// and every subsequent read are scoped to whichever it picked. Oldest
+	// membership first makes it the same tenant every time.
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	var userID, passwordHash, tenantID, name string
+	var isAdmin bool
+	var lockedUntil pgtype.Timestamptz
+	err := s.db.QueryRow(r.Context(),
+		`SELECT u.id, u.password_hash, u.name,
+		        EXISTS (
+		            SELECT 1 FROM membership_roles mr
+		            JOIN roles r ON r.id=mr.role_id
+		            WHERE mr.membership_id=m.id AND r.tenant_id=m.tenant_id
+		              AND r.code='admin' AND r.active
+		        ) AS is_admin,
+		        m.tenant_id, u.locked_until
+		 FROM users u
+		 JOIN memberships m ON m.user_id = u.id
+		 WHERE lower(u.email) = $1
+		 ORDER BY m.created_at, m.tenant_id
+		 LIMIT 1`, req.Email).Scan(&userID, &passwordHash, &name, &isAdmin, &tenantID, &lockedUntil)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		passwordHash = dummyPasswordHash
+	} else if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "login service unavailable")
+		return
+	}
+	passwordOK := auth.CheckPasswordHash(req.Password, passwordHash)
+	locked := lockedUntil.Valid && lockedUntil.Time.After(time.Now())
+	if !passwordOK || locked {
+		if userID != "" && !locked {
+			_, _ = s.db.Exec(r.Context(),
+				`UPDATE users SET
+				 failed_login_attempts=failed_login_attempts+1,
+				 locked_until=CASE WHEN failed_login_attempts+1 >= $2 THEN NOW()+$3::interval ELSE locked_until END
+				 WHERE id=$1`, userID, maxLoginFailures, loginLockoutWindow.String())
+		}
+		audit.Record(r.Context(), "unknown", "anonymous", "auth.login_failed", "user", map[string]any{"email": req.Email})
+		httpx.Error(w, http.StatusUnauthorized, "invalid email or password")
+		return
+	}
+	_, _ = s.db.Exec(r.Context(), `UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE id=$1`, userID)
+
+	token, expiresAt, err := s.issueSession(r, userID, tenantID, "password")
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "failed to establish session")
+		return
+	}
+	auth.SetSessionCookie(w, token, expiresAt)
+
+	audit.Record(r.Context(), tenantID, userID, "auth.login_success", "user", map[string]any{"email": req.Email})
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"expires_at": expiresAt,
+		"user": map[string]any{
+			"id":        userID,
+			"tenant_id": tenantID,
+			"name":      name,
+			"email":     req.Email,
+			"is_admin":  isAdmin,
+		},
+	})
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	// Logout previously only cleared the cookie; the token stayed valid
+	// forever for anyone who had captured it.
+	if token := auth.TokenFromRequest(r); token != "" {
+		if err := s.sessions.Revoke(r.Context(), token); err != nil {
+			slog.Error("failed to revoke session", "error", err)
+		}
+	}
+
+	auth.ClearSessionCookie(w)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "logged_out"})
+}
+
+// handleTenants answers which tenants the caller may act for.
+//
+// A user with one membership gets a list of one. That is not a wasted answer:
+// it is what lets the client show where it is without claiming there is
+// somewhere else to go.
+func (s *Server) handleTenants(w http.ResponseWriter, r *http.Request) {
+	claims, err := auth.UserFromContext(r.Context())
+	if err != nil {
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	options, err := s.sessions.TenantsForUser(tenant.Without(r.Context()), claims.UserID)
+	if err != nil {
+		slog.Error("failed to list the tenants a user belongs to", "user_id", claims.UserID, "error", err)
+		httpx.Error(w, http.StatusInternalServerError, "failed to list tenants")
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]any{"current": claims.TenantID, "tenants": options})
+}
+
+// handleSwitchTenant moves the caller's session to another of their tenants.
+//
+// Until this existed, which tenant a person acted in was decided once, at
+// login, by whichever membership was oldest — someone who works for two
+// organisations could reach only one of them, and the only way to change that
+// was to edit the database. Signing out and back in would not have helped: the
+// login picks the same oldest membership every time, deliberately.
+func (s *Server) handleSwitchTenant(w http.ResponseWriter, r *http.Request) {
+	claims, err := auth.UserFromContext(r.Context())
+	if err != nil {
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
+	var req struct {
+		TenantID string `json:"tenant_id"`
+	}
+	if decodeErr := json.NewDecoder(r.Body).Decode(&req); decodeErr != nil || strings.TrimSpace(req.TenantID) == "" {
+		httpx.Error(w, http.StatusBadRequest, "tenant_id is required")
+		return
+	}
+	req.TenantID = strings.TrimSpace(req.TenantID)
+
+	// Already there. Answering rather than rotating keeps a double-click on the
+	// tenant you are in from replacing a working session with another one.
+	if req.TenantID == claims.TenantID {
+		httpx.JSON(w, http.StatusOK, map[string]any{"tenant_id": claims.TenantID, "switched": false})
+		return
+	}
+
+	token, expiresAt, err := s.sessions.SwitchTenant(tenant.Without(r.Context()), auth.TokenFromRequest(r), req.TenantID)
+	switch {
+	case errors.Is(err, auth.ErrNotAMember):
+		// Not 404: whether that tenant exists is not this caller's business.
+		httpx.Error(w, http.StatusForbidden, "no membership in that tenant")
+		return
+	case errors.Is(err, auth.ErrSessionInvalid):
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	case err != nil:
+		slog.Error("failed to switch tenant", "user_id", claims.UserID, "tenant_id", req.TenantID, "error", err)
+		httpx.Error(w, http.StatusInternalServerError, "failed to switch tenant")
+		return
+	}
+
+	auth.SetSessionCookie(w, token, expiresAt)
+	// Recorded against the tenant being left, because that is the trail an
+	// administrator of it reads: this person stopped acting here, and when.
+	audit.Record(r.Context(), claims.TenantID, claims.UserID, "auth.tenant_switched", "session",
+		map[string]any{"from": claims.TenantID, "to": req.TenantID})
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"tenant_id":  req.TenantID,
+		"switched":   true,
+		"expires_at": expiresAt,
+	})
+}
+
+// handleLogoutEverywhere ends every session the caller holds.
+//
+// Logging out ends the session in front of you. This is for the one you left
+// somewhere else — a machine in an office you have left, a desktop client on a
+// laptop that was taken — and it is the only thing on the platform that answers
+// that, short of an administrator disabling the account.
+//
+// It is inside the authenticated group, so the caller is proving they hold one
+// of the sessions they are ending. The cookie here is cleared too: the session
+// it names is among those just revoked.
+func (s *Server) handleLogoutEverywhere(w http.ResponseWriter, r *http.Request) {
+	claims, err := auth.UserFromContext(r.Context())
+	if err != nil {
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	revoked, err := s.sessions.RevokeAllForUser(r.Context(), claims.UserID)
+	if err != nil {
+		slog.Error("failed to revoke every session", "user_id", claims.UserID, "error", err)
+		httpx.Error(w, http.StatusInternalServerError, "failed to end the other sessions")
+		return
+	}
+
+	auth.ClearSessionCookie(w)
+	audit.Record(r.Context(), claims.TenantID, claims.UserID, "auth.logout_everywhere", "session",
+		map[string]any{"revoked": revoked})
+	httpx.JSON(w, http.StatusOK, map[string]any{"status": "logged_out_everywhere", "revoked": revoked})
+}
+
+// Sign-in and eID polling are budgeted separately, because they are different
+// things happening at different rates.
+//
+// Signing in is the endpoint worth guessing against, and starting an eID
+// session pushes a notification to a real person's phone, so it stays tight.
+//
+// Polling is neither: it needs a session ID the relying party only ever handed
+// to whoever started that session, and it cannot be turned into an attempt at a
+// second one. What it does do is repeat — once every eid.PollWindow for as long
+// as a citizen takes to reach their phone. Sharing the sign-in budget meant a
+// few citizens waiting behind one office or NAT address spent it between them,
+// and the next person there could not sign in at all. So this is budgeted by
+// how many of them may plausibly be waiting behind a single address at once.
+const (
+	loginRatePerMinute = 5
+	loginBurst         = 5
+	pollRatePerMinute  = 60
+	pollBurst          = 15
+
+	// The AI endpoints spend somebody else's paid quota and the verification
+	// endpoint spends a mailbox credential the whole platform shares, so both
+	// have always been budgeted. The numbers move up here because they are now
+	// also the deployment-wide budget, and a limit stated in two places drifts.
+	aiRatePerMinute = 20
+	aiBurst         = 10
+
+	verifyRatePerMinute = 60
+	verifyBurst         = 20
+)
+
+func newLoginLimiter() *security.IPRateLimiter {
+	return security.NewIPRateLimiter(rate.Limit(float64(loginRatePerMinute)/60.0), loginBurst)
+}
+
+func newPollLimiter() *security.IPRateLimiter {
+	return security.NewIPRateLimiter(rate.Limit(float64(pollRatePerMinute)/60.0), pollBurst)
+}
+
+// issueSession creates a persisted session bound to the caller's IP and agent.
+func (s *Server) issueSession(r *http.Request, userID, tenantID, method string) (string, time.Time, error) {
+	return s.sessions.Create(r.Context(), userID, tenantID, method,
+		r.UserAgent(), security.ClientIP(r))
+}
+
+// signInError carries a reason that is meant for the person signing in. Account
+// linking also fails for reasons that are ours alone — a missing key, a broken
+// query, a rejected hash — and those are logged, never rendered: the citizen
+// once saw "bcrypt: password length exceeds 72 bytes" in the eID card.
+type signInError struct{ msg string }
+
+func (e signInError) Error() string { return e.msg }
+
+// reportSignInFailure answers with the reason when it is the caller's to act
+// on, and with a stable message otherwise.
+func reportSignInFailure(w http.ResponseWriter, err error) {
+	var visible signInError
+	if errors.As(err, &visible) {
+		httpx.Error(w, http.StatusForbidden, visible.Error())
+		return
+	}
+	slog.Error("failed to link verified national identity", "error", err)
+	httpx.Error(w, http.StatusInternalServerError, "Баталгаажсан eID хэрэглэгчийг Gerege SSO бүртгэлтэй холбож чадсангүй")
+}
+
+// eidLinkingKey returns the HMAC key that binds an eID subject to its platform
+// account.
+//
+// This is deliberately NOT the same knob as the eID API credential, even though
+// it used to be. EID_RP_SECRET authenticates calls to eID Mongolia and is
+// rotated on their schedule, but the same value fed eidLinkingDigest — and that
+// digest is both the synthetic account's lookup key and its password preimage.
+// Rotating the API secret therefore silently orphaned every existing eID user:
+// a new digest means a new synthetic email, so the lookup misses and the
+// citizen is either re-provisioned as a stranger (losing tenant, roles and
+// history) or refused outright when JIT provisioning is off.
+//
+// EID_LINKING_KEY separates the two. Set it to the RP secret that was in force
+// when the existing accounts were created and it keeps producing their digests
+// no matter how often EID_RP_SECRET rotates afterwards.
+//
+// The fallback preserves upstream's behaviour exactly for deployments that have
+// not set it. Note the asymmetry: presence is tested on the trimmed value, so a
+// whitespace-only EID_LINKING_KEY falls back rather than becoming a key nobody
+// meant, but the key itself is the raw value — it has to reproduce the previous
+// secret byte for byte, padding included. EID_RP_SECRET is likewise never
+// trimmed here, because trimming it now would change digests that already exist.
+func eidLinkingKey() string {
+	if raw := os.Getenv("EID_LINKING_KEY"); strings.TrimSpace(raw) != "" {
+		return raw
+	}
+	return os.Getenv("EID_RP_SECRET")
+}
+
+// eidLinkingDigest derives the stable, non-PII handle for an eID subject. It
+// doubles as the synthetic account's password preimage, so its length is not
+// cosmetic: bcrypt rejects anything over 72 bytes outright, and a suffix that
+// pushed it to 73 once failed every first-time eID sign-in.
+func eidLinkingDigest(linkingKey, subject string) string {
+	mac := hmac.New(sha256.New, []byte(linkingKey))
+	_, _ = mac.Write([]byte("eid-mn:" + subject))
+	return fmt.Sprintf("%x", mac.Sum(nil))
+}
+
+// linkEIDIdentity records who a signed-in user is to eID Mongolia.
+//
+// Qualified remote signing addresses the citizen by their ETSI semantics
+// identifier, and until this row exists nothing on the platform knows how to
+// reach the phone of the person who just authenticated. Without it every
+// signature would make the citizen retype the registration number they had
+// just proved — and a typo there would push a PIN2 prompt at somebody else.
+//
+// It is best effort on purpose. Sign-in has already succeeded by this point,
+// and failing the login because a convenience row could not be written would
+// trade a working session for a missing one.
+func (s *Server) linkEIDIdentity(ctx context.Context, userID string, identity *eid.EIDIdentity) {
+	if identity == nil {
+		return
+	}
+	subject := strings.TrimSpace(identity.CivilID)
+	if subject == "" {
+		subject = strings.TrimSpace(identity.RegNumber)
+	}
+	if subject == "" {
+		return
+	}
+	personEtsi := eidmongolia.PersonEtsi(subject)
+
+	// The conflict target is person_etsi as well as user_id: one eID citizen
+	// resolves to one platform account, and a second account claiming the same
+	// identifier would silently split that person's signing history in two.
+	if _, err := s.db.Exec(ctx,
+		`INSERT INTO user_eid_identities
+		     (user_id, civil_id, reg_number, person_etsi, given_name, surname, last_seen_at)
+		 VALUES ($1, NULLIF($2,''), NULLIF($3,''), $4, NULLIF($5,''), NULLIF($6,''), NOW())
+		 ON CONFLICT (user_id) DO UPDATE SET
+		     civil_id     = COALESCE(EXCLUDED.civil_id, user_eid_identities.civil_id),
+		     reg_number   = COALESCE(EXCLUDED.reg_number, user_eid_identities.reg_number),
+		     person_etsi  = EXCLUDED.person_etsi,
+		     given_name   = COALESCE(EXCLUDED.given_name, user_eid_identities.given_name),
+		     surname      = COALESCE(EXCLUDED.surname, user_eid_identities.surname),
+		     last_seen_at = NOW()`,
+		userID, identity.CivilID, identity.RegNumber, personEtsi,
+		identity.FirstName, identity.LastName); err != nil {
+		slog.Warn("could not link the eID identity to the platform account",
+			"user_id", userID, "error", err)
+	}
+}
+
+// resolveOrProvisionEIDUser links an eID subject to a stable, non-PII local
+// identifier. JIT provisioning is opt-in per tenant and always receives the
+// standard user role through the membership_default_role database trigger.
+func (s *Server) resolveOrProvisionEIDUser(ctx context.Context, identity *eid.EIDIdentity) (userID, tenantID string, err error) {
+	subject := strings.TrimSpace(identity.CivilID)
+	if subject == "" {
+		subject = strings.TrimSpace(identity.RegNumber)
+	}
+	if subject == "" {
+		return "", "", errors.New("eID identity carries neither a civil ID nor a registration number")
+	}
+	personEtsi := eidmongolia.PersonEtsi(subject)
+	err = s.db.QueryRow(ctx,
+		`SELECT i.user_id::text, m.tenant_id::text
+		   FROM user_eid_identities i
+		   JOIN memberships m ON m.user_id=i.user_id
+		  WHERE i.person_etsi=$1
+		  ORDER BY m.created_at, m.tenant_id LIMIT 1`, personEtsi).Scan(&userID, &tenantID)
+	if err == nil {
+		return userID, tenantID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", "", err
+	}
+	linkingKey := eidLinkingKey()
+	if linkingKey == "" {
+		return "", "", errors.New("neither EID_LINKING_KEY nor EID_RP_SECRET is set, so no account-linking key is available")
+	}
+	digest := eidLinkingDigest(linkingKey, subject)
+	syntheticEmail := "eid+" + digest[:32] + "@identity.invalid"
+	if err = s.db.QueryRow(ctx,
+		`SELECT u.id::text, m.tenant_id::text FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.email=$1
+		 ORDER BY m.created_at, m.tenant_id LIMIT 1`,
+		syntheticEmail).Scan(&userID, &tenantID); err == nil {
+		return userID, tenantID, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return "", "", err
+	}
+
+	tenantSlug := strings.TrimSpace(os.Getenv("EID_JIT_TENANT_SLUG"))
+	if tenantSlug == "" {
+		return "", "", signInError{"eID identity is verified but account provisioning is disabled"}
+	}
+	if err = s.db.QueryRow(ctx, `SELECT id::text FROM tenants WHERE slug=$1`, tenantSlug).Scan(&tenantID); err != nil {
+		return "", "", fmt.Errorf("eID provisioning tenant %q is unavailable: %w", tenantSlug, err)
+	}
+	name := strings.TrimSpace(identity.LastName + " " + identity.FirstName)
+	if name == "" {
+		name = "eID Mongolia хэрэглэгч"
+	}
+	// The synthetic account has no password login path. Keep the random-looking
+	// preimage within bcrypt's strict 72-byte input limit.
+	passwordHash, err := auth.HashPassword(digest)
+	if err != nil {
+		return "", "", err
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err = tx.QueryRow(ctx,
+		`INSERT INTO users(email,password_hash,name,is_admin) VALUES($1,$2,$3,FALSE)
+		 ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name RETURNING id::text`,
+		syntheticEmail, passwordHash, name).Scan(&userID); err != nil {
+		return "", "", err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO memberships(tenant_id,user_id) VALUES($1,$2) ON CONFLICT(tenant_id,user_id) DO NOTHING`, tenantID, userID); err != nil {
+		return "", "", err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return "", "", err
+	}
+	return userID, tenantID, nil
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	claims, err := auth.UserFromContext(r.Context())
+	if err != nil {
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var name, email string
+	var tenantName string
+	_ = s.db.QueryRow(r.Context(), `SELECT name, email FROM users WHERE id = $1`, claims.UserID).Scan(&name, &email)
+	_ = s.db.QueryRow(r.Context(), `SELECT name FROM tenants WHERE id = $1`, claims.TenantID).Scan(&tenantName)
+
+	// The effective grant of every role the member holds, so a screen can hide
+	// what the caller may not do. Administrators bypass the check, so their
+	// list stays empty rather than enumerating the whole catalog.
+	granted := make([]string, 0)
+	if !claims.IsAdmin {
+		if permissions, permErr := s.permissions.GetUserPermissions(r.Context(), claims.TenantID, claims.UserID); permErr == nil {
+			for code := range permissions {
+				granted = append(granted, code)
+			}
+			sort.Strings(granted)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id":          claims.UserID,
+		"tenant_id":   claims.TenantID,
+		"tenant_name": tenantName,
+		"name":        name,
+		"email":       email,
+		"is_admin":    claims.IsAdmin,
+		"permissions": granted,
+	})
+}

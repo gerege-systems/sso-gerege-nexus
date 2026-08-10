@@ -12,12 +12,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-
-	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // ErrNotRoutable is returned when a document cannot be sent for approval: it is
@@ -583,24 +583,22 @@ func (m *DocumentsModule) ListSignatures(ctx context.Context, tenantID, docID st
 }
 
 func (m *DocumentsModule) listWorkflowsHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	list, err := m.ListWorkflows(r.Context(), tenantID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to fetch approval chains")
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch approval chains")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 func (m *DocumentsModule) saveWorkflowHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -617,11 +615,11 @@ func (m *DocumentsModule) saveWorkflowHandler(w http.ResponseWriter, r *http.Req
 		Steps *[]WorkflowStep `json:"steps"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid approval chain payload")
+		httpx.Error(w, http.StatusBadRequest, "invalid approval chain payload")
 		return
 	}
 	if req.Steps == nil {
-		writeError(w, http.StatusBadRequest,
+		httpx.Error(w, http.StatusBadRequest,
 			"invalid approval chain payload: steps is required — send an empty array to clear the chain")
 		return
 	}
@@ -631,62 +629,59 @@ func (m *DocumentsModule) saveWorkflowHandler(w http.ResponseWriter, r *http.Req
 		writeWriteFailure(r.Context(), w, err, "failed to save the approval chain")
 		return
 	}
-	writeJSON(w, http.StatusOK, saved)
+	httpx.JSON(w, http.StatusOK, saved)
 }
 
 func (m *DocumentsModule) routeDocumentHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	doc, err := m.RouteDocument(r.Context(), tenantID, chi.URLParam(r, "id"))
 	switch {
 	case errors.Is(err, ErrNotRoutable):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "failed to route document")
+		httpx.Error(w, http.StatusInternalServerError, "failed to route document")
 		return
 	}
-	writeJSON(w, http.StatusOK, doc)
+	httpx.JSON(w, http.StatusOK, doc)
 }
 
 func (m *DocumentsModule) listDocumentStepsHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	list, err := m.DocumentSteps(r.Context(), tenantID, chi.URLParam(r, "id"))
 	switch {
 	case errors.Is(err, ErrNotSignable):
-		writeError(w, http.StatusNotFound, "document not found")
+		httpx.Error(w, http.StatusNotFound, "document not found")
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "failed to fetch the approval chain")
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch the approval chain")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 func (m *DocumentsModule) listSignaturesHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	list, err := m.ListSignatures(r.Context(), tenantID, chi.URLParam(r, "id"))
 	switch {
 	case errors.Is(err, ErrNotSignable):
-		writeError(w, http.StatusNotFound, "document not found")
+		httpx.Error(w, http.StatusNotFound, "document not found")
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "failed to fetch signatures")
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch signatures")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }

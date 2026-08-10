@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 )
 
 type PermissionStore interface {
@@ -20,7 +21,7 @@ func RequirePermission(store PermissionStore, permissionCode string) func(http.H
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims, err := auth.UserFromContext(r.Context())
 			if err != nil {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
@@ -32,7 +33,7 @@ func RequirePermission(store PermissionStore, permissionCode string) func(http.H
 
 			perms, err := store.GetUserPermissions(r.Context(), claims.TenantID, claims.UserID)
 			if err != nil || !perms[permissionCode] {
-				http.Error(w, `{"error":"forbidden: permission `+permissionCode+` required"}`, http.StatusForbidden)
+				httpx.Error(w, http.StatusForbidden, "forbidden: permission "+permissionCode+" required")
 				return
 			}
 

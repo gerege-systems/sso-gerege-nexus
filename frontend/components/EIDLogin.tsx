@@ -58,7 +58,7 @@ export default function EIDLogin({next="/apps",compact=false}:{next?:string;comp
         const res=await api.pollEID(data.session_id,control.signal);
         if(ticket.current!==mine)return;
         failures=0;
-        if(res.state==="COMPLETE"){ticket.current++;setPhase("success");if(res.token)localStorage.setItem("session_token",res.token);window.location.assign(next);return}
+        if(res.state==="COMPLETE"){ticket.current++;setPhase("success");window.location.assign(next);return}
         if(res.state==="EXPIRED"){setPhase("expired");return}
         if(res.state==="REFUSED"){setPhase("refused");return}
       }catch(e:any){

@@ -37,6 +37,18 @@ services:
 
   # One-shot goose migration runner. Without this the API starts against an
   # empty database and every query fails with "relation does not exist".
+  redis:
+    image: redis:7-alpine
+    container_name: gerege_nexus_dev_redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   migrate:
     build:
       context: .
@@ -57,6 +69,7 @@ services:
     container_name: gerege_sso_backend
     environment:
       DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/platform_db?sslmode=disable
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       PORT: 8080
       ENVIRONMENT: development
       ALLOWED_ORIGINS: http://localhost:3000

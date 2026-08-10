@@ -20,6 +20,7 @@ import {
   type SignSession,
 } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
+import { fieldClass } from "@/components/ui";
 import { errorCode, useErrorMessage } from "./shared";
 
 /**
@@ -304,7 +305,7 @@ export default function EidSignView({ onSigned }: { onSigned?: () => void }) {
                 onChange={(event) => setSignerId(event.target.value.toUpperCase())}
                 placeholder={t("esign.field.signer_id_placeholder")}
                 autoFocus
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className={fieldClass}
               />
               <p className="text-xs text-slate-500 mt-2">{t("esign.message.signer_id_hint")}</p>
               <p className="text-xs text-slate-400 mt-1">{t("esign.message.signer_id_link_hint")}</p>

@@ -21,10 +21,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eidmongolia"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/go-chi/chi/v5"
 )
 
 func (m *Module) listBatchesHandler(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +38,7 @@ func (m *Module) listBatchesHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, Page[Batch]{Items: list, Total: total, Limit: limit, Offset: offset})
+	httpx.JSON(w, http.StatusOK, Page[Batch]{Items: list, Total: total, Limit: limit, Offset: offset})
 }
 
 func (m *Module) getBatchHandler(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +51,7 @@ func (m *Module) getBatchHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, batch)
+	httpx.JSON(w, http.StatusOK, batch)
 }
 
 func (m *Module) createBatchHandler(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +113,7 @@ func (m *Module) createBatchHandler(w http.ResponseWriter, r *http.Request) {
 	audit.Record(r.Context(), tenantID, actor.UserID, "esign.batch_created", "esign", map[string]any{
 		"batch_id": batch.ID, "documents": len(batch.Items), "provider": provider,
 	})
-	writeJSON(w, http.StatusCreated, batch)
+	httpx.JSON(w, http.StatusCreated, batch)
 }
 
 // runBatchHandler starts the next pending document in the batch and returns
@@ -179,7 +179,7 @@ func (m *Module) runBatchHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		batch.Status = status
-		writeJSON(w, http.StatusOK, map[string]any{"batch": batch, "session": nil})
+		httpx.JSON(w, http.StatusOK, map[string]any{"batch": batch, "session": nil})
 		return
 	}
 
@@ -195,7 +195,7 @@ func (m *Module) runBatchHandler(w http.ResponseWriter, r *http.Request) {
 		// needs rather than starting over.
 		_ = m.store.setBatchItem(r.Context(), next.ID, ItemFailed, "", errorMessage(err))
 		batch, _ = m.store.getBatch(r.Context(), tenantID, batchID)
-		writeJSON(w, http.StatusOK, map[string]any{
+		httpx.JSON(w, http.StatusOK, map[string]any{
 			"batch": batch, "session": nil, "error": errorMessage(err),
 		})
 		return
@@ -206,7 +206,7 @@ func (m *Module) runBatchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	batch, _ = m.store.getBatch(r.Context(), tenantID, batchID)
-	writeJSON(w, http.StatusOK, map[string]any{"batch": batch, "session": session})
+	httpx.JSON(w, http.StatusOK, map[string]any{"batch": batch, "session": session})
 }
 
 // startBatchItem opens one ceremony for one document in the batch.
@@ -298,7 +298,7 @@ func (m *Module) cancelBatchHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, batch)
+	httpx.JSON(w, http.StatusOK, batch)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

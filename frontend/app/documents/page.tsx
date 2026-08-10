@@ -1,22 +1,13 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useLoadOnMount } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
-import {
-  Banner,
-  DocumentRecord,
-  RowActions,
-  SignatureCell,
-  SignatureDialog,
-  SignatureHistoryButton,
-  SignatureHistoryDialog,
-  SignatureProgress,
-  StatusBadge,
-  useDocumentActions,
-} from "@/components/documents/shared";
-import { FileText, Plus } from "lucide-react";
+import { Banner, LoadingBlock, Modal, TableCard, fieldClass } from "@/components/ui";
+import { DocumentRecord, PENDING, RowActions, SignatureCell, SignatureDialog, SignatureHistoryButton, SignatureHistoryDialog, SignatureProgress, StatusBadge, useDocumentActions } from "@/components/documents/shared";
+import { FileText, Pencil, Plus } from "lucide-react";
 
 export default function DocumentsPage() {
   const { t } = useI18n();
@@ -139,9 +130,29 @@ export default function DocumentsPage() {
 
   const { isBusy, message, setMessage, succeed, fail, route, reject } = useDocumentActions(loadData);
 
-  useEffect(() => {
-    loadSpan(PAGE, filterRef.current);
-  }, []);
+  useLoadOnMount(() => loadSpan(PAGE, filterRef.current));
+
+  // Which row's title is being corrected, and what has been typed into it. A title may
+  // be fixed until the first signature: creating a document routes it immediately, which
+  // is one step instead of two, and this is what stops that costing a permanent typo.
+  const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
+
+  const commitRename = async () => {
+    if (!renaming) return;
+    const { id, title } = renaming;
+    const row = documents.find((d) => d.id === id);
+    setRenaming(null);
+    if (!row || title.trim() === "" || title.trim() === row.title) return;
+    setMessage(null);
+    try {
+      const saved = (await api.renameDocument(id, title.trim())) as DocumentRecord | undefined;
+      // Only this row, with what the server stored.
+      if (saved?.id) setDocuments((current) => current.map((d) => (d.id === id ? { ...d, ...saved } : d)));
+      setMessage({ type: "success", text: t("documents.message.renamed", { title: saved?.title ?? title.trim() }) });
+    } catch (err: any) {
+      fail(`${t("documents.message.rename_failed")}: ${err?.message ?? ""}`);
+    }
+  };
 
   // Nothing between the click and the POST changed any state, so a second click —
   // or Enter held down — created a second document, each one routed for approval.
@@ -201,7 +212,7 @@ export default function DocumentsPage() {
         )}
       </div>
 
-      {message && <Banner message={message} onDismiss={() => setMessage(null)} />}
+      {message && <Banner tone={message.type} message={message.text} onDismiss={() => setMessage(null)} />}
 
       {/* With no rows there is no table footer to carry this, and a refresh that failed
           after an action is exactly when there are none: the news that the list is stale
@@ -274,7 +285,7 @@ export default function DocumentsPage() {
       </section>
 
       {loading && documents.length === 0 ? (
-        <div className="py-12 text-center text-slate-400">{t("documents.message.loading")}</div>
+        <LoadingBlock label={t("documents.message.loading")} />
       ) : documents.length === 0 ? (
         // Only a load that succeeded may claim the tenant has no documents; a
         // failed one says so in the banner and shows whatever it already had.
@@ -290,153 +301,186 @@ export default function DocumentsPage() {
           </div>
         )
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
-              <tr>
-                <th className="px-4 py-3">{t("documents.field.title")}</th>
-                <th className="px-4 py-3">{t("base.field.type")}</th>
-                <th className="px-4 py-3">{t("base.field.status")}</th>
-                <th className="px-4 py-3">{t("documents.field.signature")}</th>
-                <th className="px-4 py-3">{t("documents.field.created")}</th>
-                <th className="px-4 py-3 text-right">{t("base.field.actions")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {documents.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-semibold text-slate-900">{doc.title}</td>
-                  <td className="px-4 py-3 font-mono text-slate-600">{doc.doc_type}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <StatusBadge status={doc.status} />
-                      <SignatureProgress doc={doc} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-start gap-2">
-                      <SignatureCell doc={doc} />
-                      <SignatureHistoryButton doc={doc} onOpen={setHistoryTarget} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-400">{new Date(doc.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 text-right">
-                    <RowActions
-                      doc={doc}
-                      busy={isBusy(doc.id)}
-                      canSign={can("documents.sign")}
-                      canManage={can("documents.manage")}
-                      onSign={setSignTarget}
-                      onReject={reject}
-                      onRoute={route}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {/* A stale list says so for as long as it is stale — the banner can be
-              dismissed, and a refresh that failed after an action must not be the only
-              thing that says the rows are old. */}
-          {loadFailed && (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-amber-200 bg-amber-50">
-              <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => loadData()}
-                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-              >
-                {t("documents.action.retry")}
-              </button>
-            </div>
-          )}
+        <TableCard
+          head={
+            <tr>
+              <th className="px-4 py-3">{t("documents.field.title")}</th>
+              <th className="px-4 py-3">{t("base.field.type")}</th>
+              <th className="px-4 py-3">{t("base.field.status")}</th>
+              <th className="px-4 py-3">{t("documents.field.signature")}</th>
+              <th className="px-4 py-3">{t("documents.field.created")}</th>
+              <th className="px-4 py-3 text-right">{t("base.field.actions")}</th>
+            </tr>
+          }
+          footer={
+            <>
+            {/* A stale list says so for as long as it is stale — the banner can be
+                dismissed, and a refresh that failed after an action must not be the only
+                thing that says the rows are old. */}
+            {loadFailed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-amber-200 bg-amber-50">
+                <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => loadData()}
+                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {t("documents.action.retry")}
+                </button>
+              </div>
+            )}
 
 
-          {/* A partial list says so. Silence here is what makes an operator search for
-              a contract that is simply on the next page. */}
-          {hasMore && (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50">
-              <p className="text-[11px] text-slate-500">
-                {t("documents.message.showing_some", { shown: documents.length, total })}
-              </p>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={loadMore}
-                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-              >
-                {t("documents.action.load_more")}
-              </button>
-            </div>
-          )}
-        </div>
+            {/* A partial list says so. Silence here is what makes an operator search for
+                a contract that is simply on the next page. */}
+            {hasMore && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50">
+                <p className="text-[11px] text-slate-500">
+                  {t("documents.message.showing_some", { shown: documents.length, total })}
+                </p>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={loadMore}
+                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  {t("documents.action.load_more")}
+                </button>
+              </div>
+            )}
+            </>
+          }
+        >
+          {documents.map((doc) => (
+            <tr key={doc.id} className="hover:bg-slate-50">
+              <td className="px-4 py-3 font-semibold text-slate-900">
+                {renaming?.id === doc.id ? (
+                  <input
+                    autoFocus
+                    value={renaming.title}
+                    maxLength={255}
+                    onChange={(e) => setRenaming({ id: doc.id, title: e.target.value })}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename();
+                      if (e.key === "Escape") setRenaming(null);
+                    }}
+                    className="w-full px-2 py-1 text-xs font-semibold border border-indigo-300 rounded focus:ring-2 focus:ring-indigo-500"
+                  />
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <span>{doc.title}</span>
+                    {/* Offered only while it can actually be changed: nobody has signed,
+                        the document is still open, and this operator may author. */}
+                    {can("documents.manage") &&
+                      doc.signature_count === 0 &&
+                      (doc.status === PENDING || doc.status === "DRAFT") && (
+                        <button
+                          type="button"
+                          title={t("documents.action.rename")}
+                          aria-label={t("documents.action.rename")}
+                          onClick={() => setRenaming({ id: doc.id, title: doc.title })}
+                          className="shrink-0 text-slate-300 hover:text-indigo-600"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                  </span>
+                )}
+              </td>
+              <td className="px-4 py-3 font-mono text-slate-600">{doc.doc_type}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <StatusBadge status={doc.status} />
+                  <SignatureProgress doc={doc} />
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex items-start gap-2">
+                  <SignatureCell doc={doc} />
+                  <SignatureHistoryButton doc={doc} onOpen={setHistoryTarget} />
+                </div>
+              </td>
+              <td className="px-4 py-3 text-slate-400">{new Date(doc.created_at).toLocaleDateString()}</td>
+              <td className="px-4 py-3 text-right">
+                <RowActions
+                  doc={doc}
+                  busy={isBusy(doc.id)}
+                  canSign={can("documents.sign")}
+                  canManage={can("documents.manage")}
+                  onSign={setSignTarget}
+                  onReject={reject}
+                  onRoute={route}
+                />
+              </td>
+            </tr>
+          ))}
+        </TableCard>
       )}
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">{t("documents.view.create_title")}</h2>
+        <Modal label={t("documents.view.create_title")}>
+          <h2 className="text-xl font-bold text-slate-900 mb-4">{t("documents.view.create_title")}</h2>
 
-            {createFailure && (
-              <p className="mb-4 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-                {createFailure}
-              </p>
-            )}
+          {createFailure && (
+            <p className="mb-4 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+              {createFailure}
+            </p>
+          )}
 
-            <form onSubmit={handleCreate} className="space-y-4">
-              {/* maxLength is what document_records.title holds, in the characters
-                  Postgres counts. The server refuses more, so there is no reason to
-                  let it be typed and then refused. */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t("documents.field.title")} *
-                </label>
-                <input
-                  type="text"
-                  placeholder={t("documents.field.title_placeholder")}
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  maxLength={255}
-                  required
-                />
-              </div>
+          <form onSubmit={handleCreate} className="space-y-4">
+            {/* maxLength is what document_records.title holds, in the characters
+                Postgres counts. The server refuses more, so there is no reason to
+                let it be typed and then refused. */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                {t("documents.field.title")} *
+              </label>
+              <input
+                type="text"
+                placeholder={t("documents.field.title_placeholder")}
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                className={fieldClass}
+                maxLength={255}
+                required
+              />
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t("documents.field.category")}</label>
-                <select
-                  value={form.doc_type}
-                  onChange={(e) => setForm({ ...form, doc_type: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="CONTRACT">{t("documents.category.legal_contract")}</option>
-                  <option value="REQUEST">{t("documents.category.official_request")}</option>
-                  <option value="APPROVAL">{t("documents.category.internal_approval")}</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t("documents.field.category")}</label>
+              <select
+                value={form.doc_type}
+                onChange={(e) => setForm({ ...form, doc_type: e.target.value })}
+                className={fieldClass}
+              >
+                <option value="CONTRACT">{t("documents.category.legal_contract")}</option>
+                <option value="REQUEST">{t("documents.category.official_request")}</option>
+                <option value="APPROVAL">{t("documents.category.internal_approval")}</option>
+              </select>
+            </div>
 
-              <div className="flex items-center space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    setCreateFailure(null);
-                  }}
-                  className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
-                >
-                  {t("base.action.cancel")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating || !form.title.trim()}
-                  className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs disabled:opacity-50"
-                >{t("documents.action.create")}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex items-center space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false);
+                  setCreateFailure(null);
+                }}
+                className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
+              >
+                {t("base.action.cancel")}
+              </button>
+              <button
+                type="submit"
+                disabled={creating || !form.title.trim()}
+                className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs disabled:opacity-50"
+              >{t("documents.action.create")}</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {signTarget && (

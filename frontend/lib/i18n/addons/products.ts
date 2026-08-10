@@ -14,4 +14,10 @@ export const products = {
   "products.action.create": { mn: "Шинэ бараа", en: "New Product" },
 
   "products.message.loading": { mn: "Бараануудыг ачаалж байна...", en: "Loading products..." },
+
+  "products.action.save": { mn: "Бараа хадгалах", en: "Save Product" },
+
+  "products.message.empty": { mn: "Одоогоор бараа нэмээгүй байна. Каталогоо эхлүүлэхийн тулд эхний бараагаа нэмнэ үү.", en: "No products added yet — add your first one to start the catalog." },
+  "products.message.load_failed": { mn: "Барааг ачаалж чадсангүй. Бараа бүтээгдэхүүн апп суулгасан, идэвхтэй эсэхийг шалгана уу.", en: "Failed to load products. Check that the Products app is installed and enabled." },
+  "products.message.create_failed": { mn: "Бараа үүсгэж чадсангүй", en: "Failed to create product" },
 } as const;

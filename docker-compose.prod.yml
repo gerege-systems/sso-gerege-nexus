@@ -34,6 +34,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # Invalidation fan-out and the deployment-wide rate-limit counters. It holds
+  # no cached values and no session: everything in it can be lost on a restart
+  # without a user noticing, so it needs no volume and no backup. What is lost
+  # is the fan-out, and the caches it feeds all expire on their own.
+  redis:
+    image: redis:7-alpine
+    container_name: gerege_nexus_redis
+    restart: unless-stopped
+    # No persistence: this is a coordination point, not a store.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # One-shot migration runner. `up -d` waits for it to exit successfully before
   # starting the API, so the schema is never behind the binary.
   migrate:
@@ -54,7 +72,21 @@ services:
     restart: unless-stopped
     pull_policy: always
     environment:
+      # The API switches into the unprivileged gerege_nexus_app role for the
+      # duration of every tenant-scoped query (see internal/platform/dbguard),
+      # so the row-level policies from migration 00029 apply even though this
+      # connects as the owner. That protects against a handler that forgets its
+      # WHERE tenant_id, which is what the policies are for.
+      #
+      # It does not protect against the process itself: whoever can run code
+      # here can also RESET ROLE. To close that too, create a login role that
+      # owns nothing, GRANT gerege_nexus_app TO it, and point this at it —
+      # nothing in the application changes.
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/platform_db?sslmode=disable
+      # Leave REDIS_URL empty and the platform runs exactly as it did before it
+      # existed: invalidation stays inside the process and rate limits are
+      # counted per replica. That is only correct while there is one replica.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       PORT: 8080
       ENVIRONMENT: production
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://sso.gerege.mn}
@@ -115,10 +147,42 @@ services:
       ESIGN_TOKEN: ${ESIGN_TOKEN:-}
       DAN_MOCK_MODE: ${DEMO_MODE:-false}
       XYP_MOCK_MODE: ${DEMO_MODE:-false}
+      # Email verification runs through a hosted service, so this deployment
+      # holds no mailbox credential for it — only the key that identifies this
+      # platform to that service. Left empty, no verification mail can be
+      # requested and the settings screen says exactly that.
+      EMAIL_VERIFY_API_KEY: ${EMAIL_VERIFY_API_KEY:-}
+      # Extra hostnames a verification link may return somebody to.
+      # PUBLIC_ORIGIN is always allowed without being listed here.
+      EMAIL_VERIFY_REDIRECT_HOSTS: ${EMAIL_VERIFY_REDIRECT_HOSTS:-}
+      # How long a session may go unused, on top of its absolute lifetime.
+      # 0 turns it off.
+      SESSION_IDLE_TIMEOUT: ${SESSION_IDLE_TIMEOUT:-90m}
+      EMAIL_VERIFY_BASE_URL: ${EMAIL_VERIFY_BASE_URL:-}
+      # Integration connectors. Without the key the server refuses to store a
+      # credential rather than storing it in the clear, so Drive, Dropbox and
+      # Meet simply cannot be saved — which is the visible failure, not a
+      # silent one. Generate with: openssl rand -base64 32
+      INTEGRATION_ENCRYPTION_KEY: ${INTEGRATION_ENCRYPTION_KEY:-}
+      # A connector target is an address a tenant types in and this server
+      # connects to, from inside the network. Addresses that belong to the
+      # deployment — loopback, private, link-local, the cloud metadata service —
+      # are refused unless a self-hosted operator deliberately allows them.
+      INTEGRATION_ALLOW_PRIVATE_TARGETS: ${INTEGRATION_ALLOW_PRIVATE_TARGETS:-false}
+      # OAuth clients belong to whoever operates this deployment, not to each
+      # tenant: the consent screen is this platform's. Leave them empty and the
+      # providers report themselves unavailable with the reason, instead of
+      # offering a form that cannot work.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      DROPBOX_OAUTH_CLIENT_ID: ${DROPBOX_OAUTH_CLIENT_ID:-}
+      DROPBOX_OAUTH_CLIENT_SECRET: ${DROPBOX_OAUTH_CLIENT_SECRET:-}
     ports:
       - "127.0.0.1:8095:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

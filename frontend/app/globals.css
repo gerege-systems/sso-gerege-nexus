@@ -19,6 +19,11 @@
     --gerege-fg: #11161e;
     --gerege-muted: #5e646c;
     --gerege-border: #e2e5e9;
+    /* The divider colour for the top bar specifically. It follows the page
+       border everywhere the bar is painted from --gerege-chrome, and is
+       re-pointed by the design that paints the bar dark in both colour modes,
+       so a divider drawn on the bar always matches the bar it sits on. */
+    --gerege-chrome-border: var(--gerege-border);
     --gerege-success: #159455;
     --gerege-danger: #d92d20;
     --gerege-radius-card: 10px;
@@ -96,6 +101,21 @@
   }
   .gerege-nav-icon { color: #98a2b3; }
   .gerege-nav-link-active .gerege-nav-icon { color: var(--gerege-blue); }
+  /* The open/closed halves of a menu group.
+
+     A 1fr -> 0fr grid row rather than an animated height, because the links
+     inside are a list of unknown length and a height transition needs a number
+     to travel to. The row does the measuring; min-height:0 is what lets the
+     child shrink below its content, and overflow:hidden is what makes the
+     links disappear behind the fold rather than spill over the group below.
+     Transitions are already neutralised under prefers-reduced-motion. */
+  .gerege-menu-group-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.22s ease;
+  }
+  .gerege-menu-group-body[data-collapsed="true"] { grid-template-rows: 0fr; }
+  .gerege-menu-group-body > div { min-height: 0; overflow: hidden; }
   .gerege-parent-menu { border: 0; background: transparent; }
   .gerege-submenu { border-left: 1px solid var(--gerege-border); }
   .gerege-submenu .gerege-nav-link-active { box-shadow: none; position: relative; }
@@ -135,6 +155,15 @@ html[data-density="compact"] main { padding-top: 1rem; padding-bottom: 1rem; }
 
 /* Original Theme preserves the repository's original Odoo-inspired shell. */
 html[data-design="original"] .gerege-topbar { background: #0f172a; border-color: #1e293b; color: white; }
+
+/* This bar is #0f172a in light mode as well as dark, but two dividers drawn on
+   it — the brand cell's right edge and the open app-context block's — asked for
+   --gerege-border, which is the page's near-white #e2e5e9 in light mode. They
+   showed as two bright rules across the dark bar, and looked correct in dark
+   mode only because the token happens to be dark there too. Pointing the bar's
+   own divider token at the bar's border colour fixes both, and any divider
+   added to the bar later. */
+html[data-design="original"] { --gerege-chrome-border: #1e293b; }
 
 /* The bar is dark here, so its slate utilities are inverted to read against it. */
 html[data-design="original"] .gerege-topbar .text-slate-900,
@@ -249,7 +278,7 @@ html[data-theme="dark"] .border-slate-300 { border-color: var(--gerege-border) !
    tab bar and the active app's menu becomes an off-canvas drawer. */
 :root { --gerege-mobile-tabs-h: 64px; }
 .gerege-header-context { width: 0; padding-inline: 0; }
-.gerege-header-context.is-open { width: 14rem; padding-inline: 1rem; border-right: 1px solid var(--gerege-border); }
+.gerege-header-context.is-open { width: 14rem; padding-inline: 1rem; border-right: 1px solid var(--gerege-chrome-border); }
 .gerege-sidebar { position: static; width: 4rem; transition: width 0.24s ease; }
 .gerege-sidebar.is-desktop-open { width: 18rem; }
 .gerege-menu-panel { width: 0; border-right: 0; transition: width 0.24s ease; }

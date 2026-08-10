@@ -7,10 +7,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/async"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -21,26 +24,63 @@ const SessionCookieName = "session_token"
 // DefaultSessionTTL bounds how long a single login stays valid.
 const DefaultSessionTTL = 12 * time.Hour
 
+// DefaultIdleTimeout ends a session nobody has used.
+//
+// It answers a different question from DefaultSessionTTL: not "how long may
+// one sign-in last" but "how long may an unattended machine keep somebody
+// signed in". Eight hours of work should never be interrupted, and a screen
+// left in a shared office should not still be signed in after lunch.
+//
+// The desktop clients are why this is a duration rather than something
+// tighter: a native client sitting open on somebody's second monitor is doing
+// nothing for long stretches and must not be signed out for it. Deployments
+// that want a stricter rule set SESSION_IDLE_TIMEOUT; setting it to 0 turns
+// the timeout off and leaves only the absolute lifetime.
+const DefaultIdleTimeout = 90 * time.Minute
+
+// touchInterval is how stale last_seen_at may get before it is written again.
+// Without it every authenticated read would carry a write.
+const touchInterval = time.Minute
+
+// IdleTimeoutFromEnv reads SESSION_IDLE_TIMEOUT as a Go duration ("45m", "2h").
+// An unset or unreadable value gives the default; "0" turns it off.
+func IdleTimeoutFromEnv() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("SESSION_IDLE_TIMEOUT"))
+	if raw == "" {
+		return DefaultIdleTimeout
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil || parsed < 0 {
+		slog.Warn("SESSION_IDLE_TIMEOUT is not a duration; using the default",
+			"value", raw, "default", DefaultIdleTimeout)
+		return DefaultIdleTimeout
+	}
+	return parsed
+}
+
 var ErrSessionInvalid = errors.New("session is invalid or expired")
+
+// ErrNotAMember is returned when somebody asks to act for a tenant they hold no
+// membership in. It is deliberately distinct from ErrSessionInvalid: the
+// session is fine, the destination is not.
+var ErrNotAMember = errors.New("no membership in that tenant")
 
 // SessionStore issues and resolves opaque server-side session tokens.
 //
 // Tokens are 256 bits of crypto/rand output; only their SHA-256 digest is
 // persisted, so a database leak cannot be replayed as a login.
 type SessionStore struct {
-	db  *pgxpool.Pool
-	ttl time.Duration
+	db   *pgxpool.Pool
+	ttl  time.Duration
+	idle time.Duration
 }
 
 func NewSessionStore(db *pgxpool.Pool, ttl time.Duration) *SessionStore {
 	if ttl <= 0 {
 		ttl = DefaultSessionTTL
 	}
-	return &SessionStore{db: db, ttl: ttl}
+	return &SessionStore{db: db, ttl: ttl, idle: IdleTimeoutFromEnv()}
 }
-
-// TTL returns the configured session lifetime.
-func (s *SessionStore) TTL() time.Duration { return s.ttl }
 
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
@@ -85,22 +125,46 @@ func (s *SessionStore) Resolve(ctx context.Context, token string) (UserClaims, e
 		return UserClaims{}, ErrSessionInvalid
 	}
 
+	// Validating and touching in one statement, because this runs in front of
+	// every authenticated request and a second round trip here is a second
+	// round trip everywhere. The UPDATE writes at most once a minute per
+	// session; the rest of the time its WHERE matches nothing and the CTE costs
+	// an index lookup.
+	//
+	// idleCutoff is passed rather than computed in SQL so that turning the
+	// timeout off is a value this query does not have to branch on.
+	idleCutoff := time.Time{}
+	if s.idle > 0 {
+		idleCutoff = time.Now().Add(-s.idle)
+	}
+
 	var claims UserClaims
 	err := s.db.QueryRow(ctx,
-		`SELECT s.user_id::text, s.tenant_id::text, u.email,
-		        (u.is_admin OR EXISTS (
+		`WITH live AS (
+		    SELECT id FROM sessions
+		     WHERE token_hash = $1
+		       AND revoked_at IS NULL
+		       AND expires_at > NOW()
+		       AND ($2::timestamptz IS NULL OR last_seen_at > $2)
+		), touched AS (
+		    UPDATE sessions SET last_seen_at = NOW()
+		     WHERE id IN (SELECT id FROM live)
+		       AND last_seen_at < NOW() - $3::interval
+		)
+		SELECT s.user_id::text, s.tenant_id::text, u.email,
+		        EXISTS (
 		            SELECT 1 FROM memberships m
 		            JOIN membership_roles mr ON mr.membership_id=m.id
 		            JOIN roles r ON r.id=mr.role_id
 		            WHERE m.tenant_id=s.tenant_id AND m.user_id=s.user_id
 		              AND r.tenant_id=s.tenant_id AND r.code='admin' AND r.active
-		        )) AS is_admin
+		        ) AS is_admin
 		   FROM sessions s
+		   JOIN live ON live.id = s.id
 		   JOIN users u ON u.id = s.user_id
-		  WHERE s.token_hash = $1
-		    AND s.revoked_at IS NULL
-		    AND s.expires_at > NOW()`,
-		hashToken(token)).Scan(&claims.UserID, &claims.TenantID, &claims.Email, &claims.IsAdmin)
+		   JOIN memberships sm ON sm.tenant_id=s.tenant_id AND sm.user_id=s.user_id`,
+		hashToken(token), nullableTime(idleCutoff), touchInterval.String()).
+		Scan(&claims.UserID, &claims.TenantID, &claims.Email, &claims.IsAdmin)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return UserClaims{}, ErrSessionInvalid
@@ -123,7 +187,149 @@ func (s *SessionStore) Revoke(ctx context.Context, token string) error {
 	return err
 }
 
+// TenantOption is one tenant a person may act for.
+type TenantOption struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// TenantsForUser lists the tenants a person holds a membership in, by name.
+//
+// The caller must pass a context with no tenant in it. memberships carries a
+// tenant_id and is therefore under the row-level policy, so a context bound to
+// the current tenant would answer this question with the one tenant the caller
+// is already in — a switcher that only ever offers where you already are.
+func (s *SessionStore) TenantsForUser(ctx context.Context, userID string) ([]TenantOption, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT t.id::text, t.name, t.slug
+		   FROM memberships m
+		   JOIN tenants t ON t.id = m.tenant_id
+		  WHERE m.user_id = $1
+		  ORDER BY t.name, t.id`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list tenants for user: %w", err)
+	}
+	defer rows.Close()
+
+	options := make([]TenantOption, 0, 2)
+	for rows.Next() {
+		var option TenantOption
+		if err := rows.Scan(&option.ID, &option.Name, &option.Slug); err != nil {
+			return nil, fmt.Errorf("read tenant option: %w", err)
+		}
+		options = append(options, option)
+	}
+	return options, rows.Err()
+}
+
+// SwitchTenant moves a live session to another tenant the same person belongs
+// to, and returns the token that replaces the old one.
+//
+// The token is rotated rather than the row updated. A session token is the
+// authority to act inside one tenant, and the tenant is what changes here; a
+// token that silently means something different from what it meant a moment ago
+// is the thing rotation exists to prevent. It also means the audit trail keeps
+// one row per tenant a person acted in, rather than one row whose tenant column
+// is only ever the last one they chose.
+//
+// The membership check is the authorization, and it is made here rather than by
+// the caller so that no route can reach the insert without it.
+//
+// Like TenantsForUser, this needs a context with no tenant: sessions carries a
+// tenant_id, and the policy's WITH CHECK would refuse a row belonging to the
+// tenant being moved to.
+func (s *SessionStore) SwitchTenant(ctx context.Context, token, tenantID string) (string, time.Time, error) {
+	if token == "" {
+		return "", time.Time{}, ErrSessionInvalid
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("switch tenant: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var userID string
+	err = tx.QueryRow(ctx,
+		`SELECT user_id::text FROM sessions
+		  WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()`,
+		hashToken(token)).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", time.Time{}, ErrSessionInvalid
+		}
+		return "", time.Time{}, fmt.Errorf("switch tenant: %w", err)
+	}
+
+	var member bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1 AND tenant_id = $2)`,
+		userID, tenantID).Scan(&member); err != nil {
+		return "", time.Time{}, fmt.Errorf("switch tenant: %w", err)
+	}
+	if !member {
+		return "", time.Time{}, ErrNotAMember
+	}
+
+	next, err := newToken()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	// A switch is not a fresh sign-in: the new session expires when the old one
+	// would have. Otherwise moving between two tenants every so often would
+	// extend a session indefinitely without anybody proving who they are again.
+	var expiresAt time.Time
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO sessions (token_hash, user_id, tenant_id, auth_method, user_agent, ip_address, expires_at)
+		 SELECT $2, user_id, $3, auth_method, user_agent, ip_address, expires_at
+		   FROM sessions WHERE token_hash = $1
+		 RETURNING expires_at`,
+		hashToken(token), hashToken(next), tenantID).Scan(&expiresAt); err != nil {
+		return "", time.Time{}, fmt.Errorf("switch tenant: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL`,
+		hashToken(token)); err != nil {
+		return "", time.Time{}, fmt.Errorf("switch tenant: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", time.Time{}, fmt.Errorf("switch tenant: %w", err)
+	}
+	return next, expiresAt, nil
+}
+
+// RevokeAllForUser ends every session a person holds, on every device.
+//
+// It is what somebody needs after leaving a session open on a machine they no
+// longer have, and what an operator needs when an account is suspected. The
+// caller's own session goes with the rest: "sign out everywhere" that leaves
+// the browser it was pressed in signed in is not what it says.
+func (s *SessionStore) RevokeAllForUser(ctx context.Context, userID string) (int64, error) {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE sessions SET revoked_at = NOW()
+		  WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > NOW()`, userID)
+	if err != nil {
+		return 0, fmt.Errorf("revoke every session: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// nullableTime turns the zero time into a SQL NULL, which is how the resolve
+// query says "no idle timeout" without a second version of itself.
+func nullableTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t
+}
+
 // DeleteExpired purges sessions that can no longer be used.
+//
+// The seven-day grace is not caution about the expiry itself — an expired row
+// stops authenticating the moment it expires — but about the audit question
+// "when did this person last sign in", which is only answerable while the row
+// is still there.
 func (s *SessionStore) DeleteExpired(ctx context.Context) (int64, error) {
 	tag, err := s.db.Exec(ctx,
 		`DELETE FROM sessions WHERE expires_at < NOW() - INTERVAL '7 days'`)
@@ -131,6 +337,46 @@ func (s *SessionStore) DeleteExpired(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return tag.RowsAffected(), nil
+}
+
+// StartHousekeeping purges long-expired sessions until ctx is cancelled.
+//
+// Without it the table only ever grows: every sign-in writes a row and nothing
+// ever removed one, so the cost of resolving a token climbed with the lifetime
+// of the deployment rather than with the number of people using it.
+func (s *SessionStore) StartHousekeeping(ctx context.Context) {
+	async.Go("session-housekeeping", func() {
+		ticker := time.NewTicker(sessionSweepInterval)
+		defer ticker.Stop()
+		for {
+			s.sweep(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	})
+}
+
+// sessionSweepInterval is deliberately long. Nothing depends on a dead row
+// being gone promptly — it cannot authenticate anyone — so this is a size
+// concern, and sweeping hourly would be a repeated table scan bought for
+// nothing.
+const sessionSweepInterval = 6 * time.Hour
+
+func (s *SessionStore) sweep(ctx context.Context) {
+	sweepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	purged, err := s.DeleteExpired(sweepCtx)
+	if err != nil {
+		slog.Warn("auth: could not purge expired sessions", "error", err)
+		return
+	}
+	if purged > 0 {
+		slog.Info("auth: purged expired sessions", "count", purged)
+	}
 }
 
 // TokenFromRequest extracts a session token from the cookie or the

@@ -16,16 +16,8 @@ import {
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
 import RequestDrawer from "@/components/gov/RequestDrawer";
-import {
-  ALL_STATUSES,
-  Banner,
-  DashboardCards,
-  EmptyState,
-  Loading,
-  StatusBadge,
-  describeError,
-  useStatusLabel,
-} from "@/components/gov/shared";
+import { Banner, EmptyState, Loading } from "@/components/ui";
+import { ALL_STATUSES, DashboardCards, StatusBadge, describeError, useStatusLabel } from "@/components/gov/shared";
 import { Loader2 } from "lucide-react";
 
 const PAGE_SIZE = 20;

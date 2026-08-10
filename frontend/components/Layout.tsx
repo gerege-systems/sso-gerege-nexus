@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import brandLogo from "@/public/brand.webp";
 import { usePathname, useRouter } from "next/navigation";
 import { api, APP_MENU_CHANGED_EVENT } from "@/lib/api";
+import { resetAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import UserMenu from "@/components/UserMenu";
+import { TenantChoices, forgetTenants, useTenants } from "@/components/TenantChoices";
 import AICopilot from "@/components/AICopilot";
-import { Landmark, LayoutGrid, Settings, Users, Package, Boxes, Share2, CreditCard, FileText, Code2, Menu as MenuIcon, Palette, Building2, BrainCircuit, Search, Ellipsis, ShieldCheck, PenTool, ScrollText, Layers, Move, ServerCog, Activity, Copy, Upload, Tags, BadgeDollarSign, Ruler, Sliders, Percent, ArrowRightLeft, RefreshCw, Warehouse, Route, Calculator, Wallet, ChartColumn, ListOrdered, Receipt, ListChecks, Files, Workflow, Archive, KeyRound, Webhook, Inbox, CalendarClock, Timer } from "lucide-react";
+import { Landmark, LayoutGrid, Settings, Users, Package, Boxes, Share2, CreditCard, FileText, Code2, Menu as MenuIcon, Palette, Building2, BrainCircuit, Search, Ellipsis, ShieldCheck, PenTool, ScrollText, Layers, Move, ServerCog, Activity, Copy, Upload, Tags, BadgeDollarSign, Ruler, Sliders, Percent, ArrowRightLeft, RefreshCw, Warehouse, Route, Calculator, Wallet, ChartColumn, ListOrdered, Receipt, ListChecks, Files, Workflow, Archive, KeyRound, Webhook, Inbox, CalendarClock, Timer, MailCheck, ChevronDown, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 
 interface MenuItem { id:string; app_id?:string; app_name?:string; parent_id?:string; label:string; path?:string; icon:string; order:number }
 interface AppNav { id:string; name:string; icon:string; path:string; menus:MenuItem[] }
@@ -22,6 +24,7 @@ const iconMap: Record<string, React.ReactNode> = {
   users:<Users className="w-5 h-5"/>, package:<Package className="w-5 h-5"/>, boxes:<Boxes className="w-5 h-5"/>,
   "credit-card":<CreditCard className="w-5 h-5"/>, "file-text":<FileText className="w-5 h-5"/>, code:<Code2 className="w-5 h-5"/>, landmark:<Landmark className="w-5 h-5"/>,
   "pen-tool":<PenTool className="w-5 h-5"/>, settings:<Settings className="w-5 h-5"/>,
+  "mail-check":<MailCheck className="w-5 h-5"/>,
   // esign
   "scroll-text":<ScrollText className="w-5 h-5"/>, layers:<Layers className="w-5 h-5"/>,
   move:<Move className="w-5 h-5"/>, "server-cog":<ServerCog className="w-5 h-5"/>,
@@ -49,16 +52,35 @@ const iconMap: Record<string, React.ReactNode> = {
 // belongs here too: it is an identity handoff to another product, and framing
 // it in this one's navigation invites the user to wander off mid-flow.
 const PUBLIC_ROUTES=["/","/login","/auth/eid/callback","/oauth/consent"];
+// The platform groups are the only ones not backed by a server menu row, so
+// they need ids of their own. Not the translated title: the collapsed set is
+// remembered across sessions and a Mongolian operator who switches to English
+// would otherwise find every group open again.
+const PLATFORM_GROUPS={modules:"platform.modules",settings:"platform.settings"};
+const GROUPS_KEY="gerege_sidebar_groups";
+// Whether a route lives under a menu path. Compared segment by segment, because
+// a raw prefix test also matches a sibling whose path merely begins with the
+// same characters: "/products-catalog".startsWith("/products") is true, so the
+// Products app would claim the other app's routes, highlight its own tile in
+// the rail and render its own menu — leaving the sibling unreachable whenever
+// both are installed.
+function isUnder(pathname:string,path:string){return pathname===path||pathname.startsWith(path.endsWith("/")?path:path+"/")}
+
 const APP_ORDER=["io.example.contacts","io.example.products","io.example.inventory","io.example.billing","io.example.documents","io.example.esign","io.example.developer_portal","io.example.gov_services"];
 
 export default function Layout({children}:{children:React.ReactNode}){
   const [menus,setMenus]=useState<MenuItem[]>([]),[user,setUser]=useState<any>(null),[loading,setLoading]=useState(true);
   const [mobileOpen,setMobileOpen]=useState(false),[mobileMoreOpen,setMobileMoreOpen]=useState(false),[panelOpen,setPanelOpen]=useState(true);
   const [query,setQuery]=useState("");
+  // Which groups are shut, not which are open. A newly installed app arrives
+  // with ids nobody has an opinion about yet, and the useful default for those
+  // is the behaviour before this existed: open.
+  const [closedGroups,setClosedGroups]=useState<string[]>([]);
   const pathname=usePathname(),router=useRouter(),{t,locale}=useI18n(),theme=useTheme();
   const isPublic=PUBLIC_ROUTES.includes(pathname);
 
   useEffect(()=>setPanelOpen(localStorage.getItem("gerege_sidebar_open")!=="false"),[]);
+  useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(GROUPS_KEY)||"[]");if(Array.isArray(saved))setClosedGroups(saved.filter(id=>typeof id==="string"))}catch{/* hand-edited or half-written storage is not worth a crashed shell */}},[]);
   useEffect(()=>{if(isPublic){setLoading(false);return}void(async()=>{try{const [u,m]=await Promise.all([api.getMe(),api.getMenus()]);setUser(u);setMenus(m||[])}catch{router.push("/login")}finally{setLoading(false)}})()},[pathname,router,isPublic,locale]);
   useEffect(()=>{
     if(isPublic)return;
@@ -73,18 +95,30 @@ export default function Layout({children}:{children:React.ReactNode}){
     menus.filter(m=>m.app_id).forEach(m=>groups.set(m.app_id!,[...(groups.get(m.app_id!)||[]),m]));
     return [...groups.entries()].map(([id,items])=>{const sorted=items.sort((a,b)=>a.order-b.order),first=sorted.find(item=>item.path)!;return{id,name:first.label||first.app_name||id,icon:first.icon,path:first.path!,menus:sorted}}).sort((a,b)=>{const ai=APP_ORDER.indexOf(a.id),bi=APP_ORDER.indexOf(b.id);return (ai<0?999:ai)-(bi<0?999:bi)||a.id.localeCompare(b.id)});
   },[menus]);
-  const selected=apps.find(app=>app.menus.some(m=>m.path&&pathname.startsWith(m.path)))||null;
+  const selected=apps.find(app=>app.menus.some(m=>m.path&&isUnder(pathname,m.path)))||null;
   const platformActive=!selected;
   const searchIndex=useMemo(()=>[
     {label:t("web.menu.app_store"),app:t("web.label.platform"),path:"/apps",icon:"grid"},
     {label:t("web.menu.appearance"),app:t("web.label.platform"),path:"/settings/appearance",icon:"palette"},
     {label:t("web.menu.installed_apps"),app:t("web.label.platform"),path:"/settings/apps",icon:"settings"},
+    {label:t("web.menu.email_verification"),app:t("web.label.platform"),path:"/settings/email-verification",icon:"mail-check"},
     ...apps.flatMap(app=>app.menus.filter(m=>m.path).map(m=>({label:m.label,app:app.name,path:m.path!,icon:m.icon})))
-  ],[apps,locale,t]);
+  ],[apps,t]);
   const results=query.trim()?searchIndex.filter(x=>(x.label+" "+x.app).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).slice(0,8):[];
 
   function togglePanel(){if(window.matchMedia("(min-width:901px)").matches){setPanelOpen(v=>{localStorage.setItem("gerege_sidebar_open",String(!v));return !v})}else setMobileOpen(v=>!v)}
-  async function logout(){try{await api.logout()}catch{}localStorage.removeItem("session_token");router.push("/login")}
+  function persistGroups(next:string[]){localStorage.setItem(GROUPS_KEY,JSON.stringify(next));setClosedGroups(next)}
+  function toggleGroup(id:string){persistGroups(closedGroups.includes(id)?closedGroups.filter(x=>x!==id):[...closedGroups,id])}
+  // Only the groups on screen. Expand-all on the Documents menu should not
+  // silently reopen everything the operator shut on Billing — the button says
+  // what it does to the panel in front of them, and nothing else.
+  const visibleGroups=selected?selected.menus.filter(m=>!m.parent_id).map(m=>m.id):Object.values(PLATFORM_GROUPS);
+  const allGroupsOpen=visibleGroups.every(id=>!closedGroups.includes(id));
+  function toggleAllGroups(){persistGroups(allGroupsOpen?[...new Set([...closedGroups,...visibleGroups])]:closedGroups.filter(id=>!visibleGroups.includes(id)))}
+  // resetAccess before navigating: /login is a client-side route, so the cached
+  // identity would otherwise still be the signed-out user's when the next
+  // person signs in at this tab.
+  async function logout(){try{await api.logout()}catch{}resetAccess();forgetTenants();router.push("/login")}
   const brandTitle=selected?.name||(t("web.label.platform"));
   const mobileAppTabs=[
     {id:"platform",href:"/apps",active:platformActive,label:t("web.label.platform"),icon:<LayoutGrid className="w-5 h-5"/>},
@@ -97,22 +131,23 @@ export default function Layout({children}:{children:React.ReactNode}){
   if(isPublic)return <>{children}</>;
   if(loading)return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-medium">{t("web.message.loading_platform")}</div>;
 
-  const platformMenus=<><MenuGroup title={t("web.group.modules")}>
+  const platformMenus=<><MenuGroup id={PLATFORM_GROUPS.modules} title={t("web.group.modules")} closed={closedGroups.includes(PLATFORM_GROUPS.modules)} onToggle={toggleGroup}>
     <NavLink href="/apps" active={pathname==="/apps"} icon={<LayoutGrid className="w-5 h-5"/>} label={t("web.menu.app_store")}/><NavLink href="/settings/apps" active={pathname==="/settings/apps"} icon={<Settings className="w-5 h-5"/>} label={t("web.menu.installed_apps")}/>{user?.is_admin&&<NavLink href="/settings/ai" active={pathname==="/settings/ai"} icon={<BrainCircuit className="w-5 h-5"/>} label={t("web.menu.ai_settings")}/>}
-  </MenuGroup><MenuGroup title={t("web.group.settings")}>
+  </MenuGroup><MenuGroup id={PLATFORM_GROUPS.settings} title={t("web.group.settings")} closed={closedGroups.includes(PLATFORM_GROUPS.settings)} onToggle={toggleGroup}>
     <NavLink href="/settings/appearance" active={pathname==="/settings/appearance"} icon={<Palette className="w-5 h-5"/>} label={t("web.menu.appearance")}/>
-    {/* Both of these are administrator-only server-side, so they are hidden
-        the way Access control already was. The pages still explain themselves
-        if someone arrives by URL. */}
+    {/* All three are administrator-only server-side, so they are hidden the way
+        Access control already was. The pages still explain themselves if
+        someone arrives by URL. */}
     {user?.is_admin&&<NavLink href="/settings/integrations" active={pathname==="/settings/integrations"} icon={<Share2 className="w-5 h-5"/>} label={t("web.menu.integrations")}/>}
+    {user?.is_admin&&<NavLink href="/settings/email-verification" active={pathname==="/settings/email-verification"} icon={<MailCheck className="w-5 h-5"/>} label={t("web.menu.email_verification")}/>}
     {user?.is_admin&&<NavLink href="/settings/access" active={pathname==="/settings/access"} icon={<ShieldCheck className="w-5 h-5"/>} label={t("access.view.title")}/>}
   </MenuGroup></>;
 
   return <div className="gerege-shell min-h-screen flex flex-col">
     <header className="gerege-topbar h-16 flex items-center border-b sticky top-0 z-50">
-      <Link href="/apps" className="gerege-header-brand w-16 h-full shrink-0 grid place-items-center border-r border-[var(--gerege-border)]">
+      <TenantSwitcher current={user?.tenant_id} currentName={user?.tenant_name}>
         {theme.design==="gerege"?<img src={brandLogo.src} width={36} height={36} alt="Gerege SSO" className="w-9 h-9 rounded-lg shadow-sm"/>:<span className="original-brand-mark w-9 h-9 rounded-lg grid place-items-center"><Building2 className="w-6 h-6"/></span>}
-      </Link>
+      </TenantSwitcher>
       <div className={`gerege-header-context h-full flex items-center gap-3 overflow-hidden transition-all duration-200 ${panelOpen?"is-open":""}`}>
         <span className="shrink-0 text-[var(--gerege-blue)]">{selected?(iconMap[selected.icon]||<Package className="w-5 h-5"/>):<LayoutGrid className="w-5 h-5"/>}</span>
         <span className="min-w-0"><small className="block text-[11px] leading-4 text-slate-500 truncate">Gerege SSO</small><strong className="block text-[15px] leading-5 text-slate-900 truncate">{brandTitle}</strong></span>
@@ -135,9 +170,17 @@ export default function Layout({children}:{children:React.ReactNode}){
           {apps.map(app=><AppRailLink key={app.id} href={app.path} active={selected?.id===app.id} title={app.name} icon={iconMap[app.icon]||<Package className="w-5 h-5"/>}/>) }
         </nav>
         <aside className="gerege-menu-panel overflow-hidden">
-          <div className="w-56 py-4"><nav className="space-y-1 px-2">
-            {selected?<AppMenuGroups menus={selected.menus} pathname={pathname}/>:platformMenus}
-          </nav></div>
+          <div className="w-56 py-4">
+            {visibleGroups.length>1&&<div className="px-2 pb-2 flex">
+              <button type="button" onClick={toggleAllGroups} aria-expanded={allGroupsOpen} className="ml-auto flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600 hover:bg-[var(--gerege-surface-2)] transition">
+                {allGroupsOpen?<ChevronsDownUp className="w-3.5 h-3.5"/>:<ChevronsUpDown className="w-3.5 h-3.5"/>}
+                {allGroupsOpen?t("web.action.collapse_all"):t("web.action.expand_all")}
+              </button>
+            </div>}
+            <nav className="space-y-1 px-2">
+              {selected?<AppMenuGroups menus={selected.menus} pathname={pathname} closedGroups={closedGroups} onToggle={toggleGroup}/>:platformMenus}
+            </nav>
+          </div>
         </aside>
       </div>
       <main className="gerege-main flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">{children}</main>
@@ -151,9 +194,68 @@ export default function Layout({children}:{children:React.ReactNode}){
   </div>;
 }
 
+/**
+ * The brand mark, and now the way to change which organisation you are working
+ * in.
+ *
+ * The mark used to link to /apps; the Platform tile directly beneath it in the
+ * rail still does, so nothing is lost. What was missing had no home at all:
+ * which tenant a session belonged to was decided once, by whichever membership
+ * was oldest, and somebody who works for two organisations could reach only the
+ * first — signing out and back in landed them in the same one again.
+ *
+ * Below 900px the header brand is hidden by the mobile shell, so this control
+ * is not reachable there yet.
+ */
+function TenantSwitcher({current,currentName,children}:{current?:string;currentName?:string;children:React.ReactNode}){
+  const {t}=useI18n();
+  const [open,setOpen]=useState(false);
+  const {tenants,switching,failed,switchTo}=useTenants(open);
+  const box=useRef<HTMLDivElement>(null);
+  const label=currentName?`${currentName} — ${t("web.action.switch_tenant")}`:t("web.action.switch_tenant");
+
+  useEffect(()=>{
+    if(!open)return;
+    const onPointerDown=(event:MouseEvent)=>{if(!box.current?.contains(event.target as Node))setOpen(false)};
+    const onKeyDown=(event:KeyboardEvent)=>{if(event.key==="Escape")setOpen(false)};
+    document.addEventListener("mousedown",onPointerDown);
+    document.addEventListener("keydown",onKeyDown);
+    return()=>{document.removeEventListener("mousedown",onPointerDown);document.removeEventListener("keydown",onKeyDown)};
+  },[open]);
+
+  return <div ref={box} className="gerege-header-brand relative w-16 h-full shrink-0 grid place-items-center border-r border-[var(--gerege-chrome-border)]">
+    <button type="button" onClick={()=>setOpen(v=>!v)} aria-haspopup="menu" aria-expanded={open} aria-label={label} title={label}
+      className="grid place-items-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gerege-blue)]">
+      {children}
+    </button>
+    {open&&<div role="menu" aria-label={t("web.view.tenants")} className="gerege-topbar-onlight absolute left-2 top-14 w-64 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 z-[70]">
+      <p className="px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">{t("web.view.tenants")}</p>
+      <TenantChoices current={current} tenants={tenants} switching={switching} failed={failed} onChoose={id=>void switchTo(id)} onStay={()=>setOpen(false)}/>
+    </div>}
+  </div>;
+}
 function AppRailLink({href,active,title,icon}:{href:string;active:boolean;title:string;icon:React.ReactNode}){return <Link href={href} title={title} aria-label={title} className={`w-11 h-11 rounded-xl grid place-items-center transition ${active?"bg-[var(--gerege-blue-soft)] text-[var(--gerege-blue)] shadow-sm":"text-slate-500 hover:bg-[var(--gerege-surface-2)] hover:text-slate-800"}`}>{icon}</Link>}
 function MobileAppTab({href,active,label,icon}:{href:string;active:boolean;label:string;icon:React.ReactNode}){return <Link href={href} aria-label={label} aria-current={active?"page":undefined} className={`gerege-mobile-tab ${active?"is-active":""}`}><span>{icon}</span><small>{label}</small></Link>}
 function MobileMoreApp({href,active,label,icon}:{href:string;active:boolean;label:string;icon:React.ReactNode}){return <Link href={href} aria-current={active?"page":undefined} className={`gerege-mobile-more-app ${active?"is-active":""}`}><span>{icon}</span><strong>{label}</strong></Link>}
 function NavLink({href,active,icon,label}:{href:string;active:boolean;icon:React.ReactNode;label:string}){return <Link href={href} className={`gerege-nav-link flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition ${active?"gerege-nav-link-active font-semibold":""}`}><span className="gerege-nav-icon">{icon}</span><span>{label}</span></Link>}
-function MenuGroup({title,children}:{title:string;children:React.ReactNode}){return <section className="mb-6"><h3 className="px-3 mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">{title}</h3><div className="space-y-1">{children}</div></section>}
-function AppMenuGroups({menus,pathname}:{menus:MenuItem[];pathname:string}){const roots=menus.filter(item=>!item.parent_id).sort((a,b)=>a.order-b.order);return <>{roots.map(root=><MenuGroup key={root.id} title={root.label}>{menus.filter(item=>item.parent_id===root.id&&item.path).sort((a,b)=>a.order-b.order).map(item=><NavLink key={item.id} href={item.path!} active={pathname.startsWith(item.path!)} icon={iconMap[item.icon]||<Package className="w-5 h-5"/>} label={item.label}/>)}</MenuGroup>)}</>}
+function MenuGroup({id,title,closed,onToggle,children}:{id:string;title:string;closed:boolean;onToggle:(id:string)=>void;children:React.ReactNode}){
+  const bodyId=`menu-group-${id}`;
+  return <section className="gerege-menu-group mb-6">
+    {/* Still a heading, so the panel keeps its outline for a screen reader;
+        the button inside is what the heading names, which is the pairing
+        aria-expanded/aria-controls expects. */}
+    <h3 className="mb-2">
+      <button type="button" onClick={()=>onToggle(id)} aria-expanded={!closed} aria-controls={bodyId} className="w-full flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600 hover:bg-[var(--gerege-surface-2)] transition">
+        <span className="min-w-0 truncate text-left">{title}</span>
+        <ChevronDown className={`w-3.5 h-3.5 ml-auto shrink-0 transition-transform duration-200 ${closed?"":"rotate-180"}`}/>
+      </button>
+    </h3>
+    {/* inert and not just hidden by overflow: a link folded away is still a
+        link, and without this Tab would walk into a group the operator can
+        see is shut and land focus somewhere off-screen. */}
+    <div id={bodyId} data-collapsed={closed} inert={closed} className="gerege-menu-group-body">
+      <div className="space-y-1">{children}</div>
+    </div>
+  </section>;
+}
+function AppMenuGroups({menus,pathname,closedGroups,onToggle}:{menus:MenuItem[];pathname:string;closedGroups:string[];onToggle:(id:string)=>void}){const roots=menus.filter(item=>!item.parent_id).sort((a,b)=>a.order-b.order);return <>{roots.map(root=><MenuGroup key={root.id} id={root.id} title={root.label} closed={closedGroups.includes(root.id)} onToggle={onToggle}>{menus.filter(item=>item.parent_id===root.id&&item.path).sort((a,b)=>a.order-b.order).map(item=><NavLink key={item.id} href={item.path!} active={isUnder(pathname,item.path!)} icon={iconMap[item.icon]||<Package className="w-5 h-5"/>} label={item.label}/>)}</MenuGroup>)}</>}

@@ -9,6 +9,7 @@
 package esign
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -21,10 +22,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/gerege"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/go-chi/chi/v5"
 )
 
 func (m *Module) listDocumentsHandler(w http.ResponseWriter, r *http.Request) {
@@ -50,10 +51,10 @@ func (m *Module) listDocumentsHandler(w http.ResponseWriter, r *http.Request) {
 	// screen still reads it that way, so paginated callers opt in explicitly
 	// rather than every existing client breaking on an envelope.
 	if r.URL.Query().Get("paginated") == "true" {
-		writeJSON(w, http.StatusOK, Page[Document]{Items: list, Total: total, Limit: limit, Offset: offset})
+		httpx.JSON(w, http.StatusOK, Page[Document]{Items: list, Total: total, Limit: limit, Offset: offset})
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 func (m *Module) getDocumentHandler(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +67,7 @@ func (m *Module) getDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, doc)
+	httpx.JSON(w, http.StatusOK, doc)
 }
 
 // uploadDocumentHandler takes a base64 payload. It is the original intake and
@@ -182,7 +183,7 @@ func (m *Module) storeUpload(w http.ResponseWriter, r *http.Request, tenantID st
 		"title":       doc.Title,
 		"bytes":       len(pdf),
 	})
-	writeJSON(w, http.StatusCreated, doc)
+	httpx.JSON(w, http.StatusCreated, doc)
 }
 
 func (m *Module) downloadDocumentHandler(w http.ResponseWriter, r *http.Request) {
@@ -301,6 +302,30 @@ func decodeLargeJSON(r *http.Request, out any) error {
 	r.Body = http.MaxBytesReader(nil, r.Body, maxUploadBody)
 	if err := json.NewDecoder(r.Body).Decode(out); err != nil {
 		return badRequest("INVALID_BODY", "the request body is not valid JSON or exceeds the size limit")
+	}
+	return nil
+}
+
+// decodeOptionalJSON reads a body that is allowed to be absent, and refuses one
+// that is present but unreadable.
+//
+// The distinction matters where the two mean different things. On the export
+// endpoint an absent body means "every automatic destination" and a body naming
+// one connector means that connector alone — so discarding a malformed body,
+// as this used to, silently turns "file this contract in the archive" into
+// "file it everywhere", which for a signed document is a disclosure nobody
+// asked for. An empty body is still a request; a broken one is an error.
+func decodeOptionalJSON(r *http.Request, out any) error {
+	r.Body = http.MaxBytesReader(nil, r.Body, maxUploadBody)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return badRequest("INVALID_BODY", "the request body could not be read or exceeds the size limit")
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		return badRequest("INVALID_BODY", "the request body is not valid JSON")
 	}
 	return nil
 }

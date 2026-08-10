@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
 import TaskQueue from "@/components/gov/TaskQueue";
-import { PageHeader } from "@/components/gov/shared";
+import { PageHeader } from "@/components/ui";
 import { CalendarClock, ChevronRight, Inbox, Landmark, Timer, Workflow } from "lucide-react";
 
 /**

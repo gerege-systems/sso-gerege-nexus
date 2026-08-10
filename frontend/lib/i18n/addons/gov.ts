@@ -96,4 +96,13 @@ export const gov = {
   "gov.message.no_routing_rules": { mn: "Дүрэм үүсгээгүй байна.", en: "No routing rules yet." },
   "gov.message.no_published_workflow": { mn: "Нийтэлсэн урсгал алга — эхлээд Шийдвэрлэх урсгал хэсгээс үүсгэнэ үү.", en: "No published workflow yet — create one under Decision workflow." },
   "gov.message.queue_empty": { mn: "Дараалалд ажил алга.", en: "Nothing in the queue." },
+
+  "gov.field.appointment_mode": { mn: "Уулзалтын хэлбэр", en: "Appointment mode" },
+  "gov.state.in_person": { mn: "Биечлэн", en: "In person" },
+  "gov.state.online": { mn: "Цахимаар", en: "Online" },
+  "gov.field.meeting_link": { mn: "Холбогдох линк", en: "Joining link" },
+  "gov.action.join_meeting": { mn: "Уулзалтад нэгдэх", en: "Join the meeting" },
+  // The slot is booked either way. A conferencing outage must not cost the
+  // citizen their appointment, so the failure is reported, not thrown.
+  "gov.message.meeting_unavailable": { mn: "Цаг захиалга бүртгэгдсэн ч холбогдох линк үүсээгүй байна: {reason}", en: "The appointment is booked, but no joining link was created: {reason}" },
 } as const;

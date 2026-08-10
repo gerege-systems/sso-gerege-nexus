@@ -370,4 +370,9 @@ export const esign = {
   },
 
   "esign.message.policy_saved": { mn: "Бодлогыг хадгаллаа.", en: "The policy was saved." },
+
+  "esign.action.export": { mn: "Үүлэн санд хадгалах", en: "Send to cloud storage" },
+  "esign.message.exported": { mn: "{count} хаяг руу хадгаллаа", en: "Filed to {count} destination(s)" },
+  "esign.message.export_failed": { mn: "Үүлэн санд хадгалж чадсангүй", en: "Could not file the document" },
+  "esign.message.no_destination": { mn: "Автоматаар хүлээн авах холбогдсон хаяг алга байна. Тохиргоо → Интеграц хэсгээс нэмнэ үү.", en: "No connected destination is set to receive documents. Add one under Settings → Integrations." },
 } as const;

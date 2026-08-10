@@ -29,7 +29,6 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: Run govulncheck
-        continue-on-error: true
         run: govulncheck ./...
 
   gosec:
@@ -45,10 +44,22 @@ jobs:
       # govulncheck reads vuln DB → flags vulnerable deps; gosec reads
       # source → flags antipatterns (hardcoded creds, weak crypto,
       # SQL injection patterns, unsafe file perms, etc.).
+      #
+      # Built from source with the toolchain setup-go just installed, rather
+      # than run from the published action's container. That container carries
+      # its own older Go, which could not import pgx from a module targeting a
+      # newer language version — so the scan reported "Issues: 0" and then
+      # exited non-zero on the compile errors, which is a red security scan
+      # that has found nothing and a habit of ignoring it. The lint job in
+      # ci.yml uses install-mode: goinstall for exactly this reason.
+      #
+      # The version is pinned so a scan does not start failing on somebody
+      # else's release.
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.22.8
       - name: Run gosec
-        uses: securego/gosec@master
-        with:
-          # G104 (errcheck) is noisy and golangci-lint already covers it.
-          # G404 (math/rand) is only used for circuit-breaker jitter — never
-          # for tokens or secrets, which use crypto/rand.
-          args: "-exclude=G104,G404 ./backend/..."
+        working-directory: backend
+        # G104 (errcheck) is noisy and golangci-lint already covers it.
+        # G404 (math/rand) is only used for circuit-breaker jitter — never
+        # for tokens or secrets, which use crypto/rand.
+        run: gosec -exclude=G104,G404 ./...

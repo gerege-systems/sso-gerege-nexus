@@ -107,6 +107,13 @@ d'exploitation des microservices.
 - **Fournisseur OAuth2 / OIDC intégré**
   (`/.well-known/openid-configuration`) délivrant des jetons
   client-credentials à des systèmes tiers.
+- **Vérification d'e-mail** (`platform/emailverify`) — un flux partagé pour
+  prouver une adresse, appelé en interne par chaque module applicatif. L'e-mail
+  est envoyé par le service hébergé (`enigma.mn`) : la plateforme ne détient
+  aucune information d'authentification de messagerie et ne possède pas
+  d'adresse d'expéditeur. La vérification est enregistrée au retour de la
+  personne, et ce retour ne fonctionne qu'une fois. Visible dans Paramètres →
+  Vérification d'e-mail.
 
 > **Remarque.** Le mode simulé (mock) pour E-ID, DAN et XYP est une commodité de
 > développement uniquement. Avec `ENVIRONMENT=production` il est désactivé
@@ -283,6 +290,9 @@ Voir [`.env.example`](../.env.example) pour la liste complète.
 | `GET` | `/api/v1/menus` | Menus des applications activées pour le locataire |
 | `GET` | `/api/v1/store/apps` | Liste du magasin d'applications |
 | `POST` | `/api/v1/store/apps/{slug}/install` | Installer une application (admin) |
+| `POST` | `/api/v1/verify/send` | Demander un lien de vérification au service hébergé |
+| `GET` | `/api/v1/verify/landed` | Recevoir la personne qui a confirmé — valable une seule fois |
+| `GET` | `/api/v1/admin/email-verification/overview` | Historique des vérifications et état du service (admin) |
 | `POST` | `/oauth2/token` | Jeton OAuth2 client credentials |
 
 Les jetons de session circulent soit dans le cookie HttpOnly, soit via

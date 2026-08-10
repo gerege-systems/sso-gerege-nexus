@@ -120,6 +120,9 @@ func NewEIDService() *EIDService {
 	}
 	tokenURL := os.Getenv("EID_TOKEN_URL")
 	if tokenURL == "" {
+		// #nosec G101 -- this is the gateway's public OAuth2 token endpoint,
+		// flagged because the variable is named for the endpoint it calls. The
+		// credentials that go to it are EID_RP_UUID and EID_RP_SECRET.
 		tokenURL = "https://sso.gov.mn/oauth2/token"
 	}
 	userURL := os.Getenv("EID_USERINFO_URL")

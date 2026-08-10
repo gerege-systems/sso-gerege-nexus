@@ -103,6 +103,9 @@ func ValidateManifest(m Manifest, platformVersion string) error {
 
 // LoadManifestFile loads and validates a manifest file.
 func LoadManifestFile(path string, platformVersion string) (Manifest, error) {
+	// #nosec G304 -- the only caller builds this from the catalogue directory
+	// and a slug already checked by security.IsValidSlug, which admits neither
+	// a separator nor a dot. It is read once at startup, never per request.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("read manifest file %s: %w", path, err)

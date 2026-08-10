@@ -42,6 +42,50 @@ func TestIsValidSlug(t *testing.T) {
 	}
 }
 
+func TestSafeCORSOrigins(t *testing.T) {
+	tests := []struct {
+		name  string
+		env   string
+		want  []string
+		unset bool
+	}{
+		{name: "unset falls back to local development", unset: true,
+			want: []string{"http://localhost:3000", "http://127.0.0.1:3000"}},
+		{name: "single origin", env: "https://nexus.gov.mn",
+			want: []string{"https://nexus.gov.mn"}},
+		// The reason this function exists: a list written with spaces after the
+		// commas used to yield origins with a leading space, which match no
+		// Origin header a browser ever sends.
+		{name: "spaces after the commas are not part of the origin",
+			env:  "https://a.gov.mn, https://b.gov.mn ,\thttps://c.gov.mn",
+			want: []string{"https://a.gov.mn", "https://b.gov.mn", "https://c.gov.mn"}},
+		{name: "empty entries are dropped", env: "https://a.gov.mn,,https://b.gov.mn,",
+			want: []string{"https://a.gov.mn", "https://b.gov.mn"}},
+		{name: "a value of only separators falls back rather than allowing nothing",
+			env:  " , ",
+			want: []string{"http://localhost:3000", "http://127.0.0.1:3000"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.unset {
+				t.Setenv("ALLOWED_ORIGINS", "")
+			} else {
+				t.Setenv("ALLOWED_ORIGINS", tc.env)
+			}
+			got := security.SafeCORSOrigins()
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("got %q, want %q", got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestRateLimitMiddleware(t *testing.T) {
 	limiter := security.NewIPRateLimiter(rate.Limit(2), 2) // 2 requests allowed
 	middleware := security.RateLimitMiddleware(limiter)
@@ -72,5 +116,25 @@ func TestRateLimitMiddleware(t *testing.T) {
 	handler.ServeHTTP(rec3, req)
 	if rec3.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 Too Many Requests, got %d", rec3.Code)
+	}
+}
+
+func TestClientIPUsesTrustedProxyBoundary(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "10.0.0.10:4321"
+	req.Header.Set("X-Forwarded-For", "198.51.100.1, 203.0.113.7")
+	req.Header.Set("X-Real-IP", "192.0.2.9")
+
+	t.Setenv("TRUST_PROXY_HEADERS", "")
+	if got := security.ClientIP(req); got != "10.0.0.10" {
+		t.Fatalf("untrusted headers: got %q", got)
+	}
+	t.Setenv("TRUST_PROXY_HEADERS", "true")
+	if got := security.ClientIP(req); got != "192.0.2.9" {
+		t.Fatalf("X-Real-IP: got %q", got)
+	}
+	req.Header.Del("X-Real-IP")
+	if got := security.ClientIP(req); got != "203.0.113.7" {
+		t.Fatalf("right-most XFF: got %q", got)
 	}
 }

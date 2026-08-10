@@ -11,13 +11,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	coreeid "github.com/gerege-systems/open-gerege-core/pkg/eid"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-
-	coreeid "github.com/gerege-systems/open-gerege-core/pkg/eid"
-
-	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
-	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
 )
 
 // E-ID signing is not a form the platform fills in on the citizen's behalf. eID
@@ -447,9 +446,8 @@ func (m *DocumentsModule) PollEIDSignature(ctx context.Context, tenantID, docID,
 }
 
 func (m *DocumentsModule) startEIDSignatureHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -457,32 +455,31 @@ func (m *DocumentsModule) startEIDSignatureHandler(w http.ResponseWriter, r *htt
 		RegNumber string `json:"reg_number"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.RegNumber) == "" {
-		writeError(w, http.StatusBadRequest, "invalid signature request: reg_number is required")
+		httpx.Error(w, http.StatusBadRequest, "invalid signature request: reg_number is required")
 		return
 	}
 
 	session, err := m.StartEIDSignature(r.Context(), tenantID, chi.URLParam(r, "id"), req.RegNumber)
 	switch {
 	case errors.Is(err, ErrNotSignable), errors.Is(err, ErrAlreadySigned):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case errors.Is(err, ErrProviderUnavailable):
-		writeError(w, http.StatusServiceUnavailable, err.Error())
+		httpx.Error(w, http.StatusServiceUnavailable, err.Error())
 		return
 	case errors.Is(err, ErrSignatureRejected):
-		writeError(w, http.StatusBadRequest, err.Error())
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "failed to start the signature request")
+		httpx.Error(w, http.StatusInternalServerError, "failed to start the signature request")
 		return
 	}
-	writeJSON(w, http.StatusOK, session)
+	httpx.JSON(w, http.StatusOK, session)
 }
 
 func (m *DocumentsModule) pollEIDSignatureHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -490,27 +487,27 @@ func (m *DocumentsModule) pollEIDSignatureHandler(w http.ResponseWriter, r *http
 		SessionID string `json:"session_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.SessionID) == "" {
-		writeError(w, http.StatusBadRequest, "invalid poll request: session_id is required")
+		httpx.Error(w, http.StatusBadRequest, "invalid poll request: session_id is required")
 		return
 	}
 
 	progress, err := m.PollEIDSignature(r.Context(), tenantID, chi.URLParam(r, "id"), req.SessionID)
 	switch {
 	case errors.Is(err, ErrSignSessionUnknown):
-		writeError(w, http.StatusNotFound, err.Error())
+		httpx.Error(w, http.StatusNotFound, err.Error())
 		return
 	case errors.Is(err, ErrNotSignable), errors.Is(err, ErrAlreadySigned):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case errors.Is(err, ErrProviderUnavailable):
-		writeError(w, http.StatusServiceUnavailable, err.Error())
+		httpx.Error(w, http.StatusServiceUnavailable, err.Error())
 		return
 	case errors.Is(err, ErrSignatureRejected):
-		writeError(w, http.StatusBadRequest, err.Error())
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "failed to complete the signature")
+		httpx.Error(w, http.StatusInternalServerError, "failed to complete the signature")
 		return
 	}
-	writeJSON(w, http.StatusOK, progress)
+	httpx.JSON(w, http.StatusOK, progress)
 }

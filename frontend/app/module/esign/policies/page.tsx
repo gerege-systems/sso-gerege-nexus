@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import { Save, ShieldCheck } from "lucide-react";
 import { esign, type Policy } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
-import { Banner, Card, Loading, PageHeader, useErrorMessage } from "@/components/esign/shared";
+import { Banner, Loading, PageHeader, fieldClass } from "@/components/ui";
+import { Card, useErrorMessage } from "@/components/esign/shared";
 
 /**
  * Signing policy — the rules that decide what counts as a valid signature here.
@@ -29,7 +30,7 @@ export default function EsignPoliciesPage() {
       .then((settings) => setPolicy(settings.policy))
       .catch((err) => setError(describe(err, t("base.message.error"))))
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [describe, t]);
 
   const update = (patch: Partial<Policy>) => setPolicy((current) => (current ? { ...current, ...patch } : current));
 
@@ -146,7 +147,7 @@ export default function EsignPoliciesPage() {
                   min={0}
                   value={policy.retention_days}
                   onChange={(event) => update({ retention_days: Number(event.target.value) })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  className={fieldClass}
                 />
                 <p className="text-[11px] text-slate-500 mt-1">{t("esign.field.retention_days_hint")}</p>
               </div>
@@ -161,7 +162,7 @@ export default function EsignPoliciesPage() {
                   max={25}
                   value={policy.max_upload_mb}
                   onChange={(event) => update({ max_upload_mb: Number(event.target.value) })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  className={fieldClass}
                 />
                 <p className="text-[11px] text-slate-500 mt-1">{t("esign.field.max_upload_mb_hint")}</p>
               </div>

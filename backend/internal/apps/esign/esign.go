@@ -22,6 +22,7 @@
 package esign
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -30,33 +31,47 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eidmongolia"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/gerege"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/integration"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/rbac"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Module struct {
-	db    *pgxpool.Pool
-	store *store
-	hsm   *gerege.EsignService
-	eid   *eidmongolia.Service
-	perms *rbac.SQLPermissionStore
+// FileExporter is the part of the integration manager this module needs: a way
+// to put a finished document somewhere outside the platform.
+//
+// It is an interface rather than the concrete manager so a test can sign a
+// document without a Google account, and so the dependency reads as what esign
+// actually wants — somewhere to file a PDF — rather than as "integrations".
+type FileExporter interface {
+	ExportFileToAll(ctx context.Context, tenantID, filename string, content []byte, reference string) []integration.ExportResult
+	ExportFile(ctx context.Context, tenantID, integrationID, filename string, content []byte, reference string) (*integration.ExportResult, error)
 }
 
-func New(db *pgxpool.Pool, hsm *gerege.EsignService, eid *eidmongolia.Service) *Module {
+type Module struct {
+	db      *pgxpool.Pool
+	store   *store
+	hsm     *gerege.EsignService
+	eid     *eidmongolia.Service
+	perms   *rbac.SQLPermissionStore
+	exports FileExporter
+}
+
+func New(db *pgxpool.Pool, hsm *gerege.EsignService, eid *eidmongolia.Service, exports FileExporter) *Module {
 	m := &Module{
-		db:    db,
-		store: &store{db: db},
-		hsm:   hsm,
-		eid:   eid,
-		perms: rbac.NewSQLPermissionStore(db),
+		db:      db,
+		store:   &store{db: db},
+		hsm:     hsm,
+		eid:     eid,
+		perms:   rbac.NewSQLPermissionStore(db),
+		exports: exports,
 	}
 	appregistry.Register(m)
 	return m
@@ -78,7 +93,7 @@ func (m *Module) Permissions() []internal.PermissionDefinition {
 
 func (m *Module) Menus() []internal.MenuDefinition {
 	return []internal.MenuDefinition{
-		{ID: "esign", ParentID: "operations", Label: "PDF E-Sign", Path: "/esign", Icon: "pen-tool", Order: 55, Labels: map[string]string{"mn": "PDF цахим гарын үсэг"}},
+		{ID: "esign", ParentID: "operations", Label: "PDF E-Sign", Path: "/esign", Icon: "pen-tool", Order: 55, Labels: map[string]string{"mn": "PDF цахим гарын үсэг", "ar": "توقيع PDF الإلكتروني", "zh": "PDF 电子签名", "fr": "Signature électronique PDF", "ru": "Электронная подпись PDF", "es": "Firma electrónica PDF"}},
 	}
 }
 
@@ -93,6 +108,7 @@ func (m *Module) RegisterRoutes(r chi.Router, tenantAuthMiddleware func(http.Han
 		er.Get("/documents/{id}", m.getDocumentHandler)
 		er.Delete("/documents/{id}", m.deleteDocumentHandler)
 		er.Get("/documents/{id}/download", m.downloadDocumentHandler)
+		er.Post("/documents/{id}/export", m.exportDocumentHandler)
 
 		// HSM rail
 		er.Post("/cert/check", m.checkCertHandler)
@@ -190,12 +206,6 @@ func (m *Module) log(r *http.Request, entry logEntry) {
 
 // ─── Responses ───────────────────────────────────────────────────────────────
 
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
 // writeDomainError maps a domain error onto its status and machine code. An
 // unrecognised error is reported as a generic internal failure and logged,
 // rather than having its text — which may quote an upstream body carrying
@@ -207,11 +217,11 @@ func writeDomainError(w http.ResponseWriter, err error) {
 		if status == 0 {
 			status = http.StatusBadRequest
 		}
-		writeJSON(w, status, map[string]string{"error": domain.Message, "code": domain.Code})
+		httpx.JSON(w, status, map[string]string{"error": domain.Message, "code": domain.Code})
 		return
 	}
 	slog.Error("esign: unhandled error", "error", err)
-	writeJSON(w, http.StatusInternalServerError, map[string]string{
+	httpx.JSON(w, http.StatusInternalServerError, map[string]string{
 		"error": "internal error", "code": "INTERNAL",
 	})
 }

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/config"
 )
 
 // TestBlueprintEntriesHaveRealPages is the inverse of the rule this file used
@@ -36,19 +38,35 @@ func TestBlueprintEntriesHaveRealPages(t *testing.T) {
 	}
 }
 
-// TestBlueprintLabelsAreTranslated keeps a menu entry from shipping with an
-// English label in the Mongolian navigation.
-func TestBlueprintLabelsAreTranslated(t *testing.T) {
+// A menu label missing a locale does not fail, it falls back to English — which
+// is why the gap went unnoticed until a screen showed three languages at once.
+// Coverage is therefore asserted rather than left to be noticed.
+func TestEveryMenuLabelCoversEverySupportedLocale(t *testing.T) {
+	check := func(name, en string, labels map[string]string) {
+		t.Helper()
+		if en == "" {
+			t.Errorf("%s: empty English label", name)
+		}
+		for _, locale := range config.SupportedLocales {
+			if locale == "en" {
+				continue // en is the fallback and lives in the Label field
+			}
+			if labels[locale] == "" {
+				t.Errorf("%s: no %s translation", name, locale)
+			}
+		}
+	}
+
 	for appID, bp := range blueprints {
 		for _, item := range append(append([]futureMenu{}, bp.Modules...), bp.Settings...) {
-			if item.EN == "" || item.MN == "" {
-				t.Errorf("%s menu %q is missing a label: en=%q mn=%q", appID, item.ID, item.EN, item.MN)
-			}
+			check(appID+"/"+item.ID, item.EN, item.Labels)
 			if item.Icon == "" {
 				t.Errorf("%s menu %q has no icon", appID, item.ID)
 			}
 		}
 	}
+	check("group/modules", "Modules", groupModules)
+	check("group/settings", "Settings", groupSettings)
 }
 
 func repoRoot(t *testing.T) string {

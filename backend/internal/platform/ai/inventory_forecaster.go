@@ -44,17 +44,22 @@ func (f *Forecaster) AnalyzeTenantStock(ctx context.Context, tenantID string) ([
 	}
 	defer rows.Close()
 
-	var list []ForecastRecommendation
+	// A forecast is only worth acting on if it saw every product. Dropping the
+	// rows that failed to scan, and returning early on a broken stream, both
+	// produce a reorder list that is short in exactly the direction that hurts:
+	// the product nobody was told to reorder.
+	list := make([]ForecastRecommendation, 0)
 	for rows.Next() {
 		var item ForecastRecommendation
-		if err := rows.Scan(&item.ProductID, &item.SKU, &item.ProductName, &item.CurrentStock); err == nil {
-			item.RecommendedMin = 10 // Safety stock baseline
-			if item.CurrentStock < item.RecommendedMin {
-				item.ReorderAlert = true
-				item.SuggestedReorder = (item.RecommendedMin * 2) - item.CurrentStock
-			}
-			list = append(list, item)
+		if err := rows.Scan(&item.ProductID, &item.SKU, &item.ProductName, &item.CurrentStock); err != nil {
+			return nil, err
 		}
+		item.RecommendedMin = 10 // Safety stock baseline
+		if item.CurrentStock < item.RecommendedMin {
+			item.ReorderAlert = true
+			item.SuggestedReorder = (item.RecommendedMin * 2) - item.CurrentStock
+		}
+		list = append(list, item)
 	}
-	return list, nil
+	return list, rows.Err()
 }

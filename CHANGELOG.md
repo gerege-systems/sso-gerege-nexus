@@ -16,6 +16,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Switching between the organisations you belong to
+
+- **The membership table always allowed several; the runtime allowed one.**
+  Which tenant a session acted for was decided at login by whichever membership
+  was oldest (`internal/platform/auth_handlers.go`), and nothing could change it
+  afterwards — signing out and back in landed the same person in the same
+  tenant, deliberately, so somebody working for two organisations could reach
+  only the first. `GET /api/v1/auth/tenants` lists the ones they may act for and
+  `POST /api/v1/auth/switch-tenant` moves the session to one of them.
+- **The token is rotated, not the row updated.** A session token is the
+  authority to act inside one tenant, and the tenant is what changes; the new
+  session inherits the old one's expiry, so moving between two organisations
+  cannot be used to keep a session alive without signing in again. The
+  membership check lives in the store, where no route can reach the insert
+  without it, and a tenant the caller is not in answers 403 rather than 404 —
+  whether it exists is not their business.
+- **Both queries deliberately leave the tenant behind** (`tenant.Without`):
+  `memberships` carries a `tenant_id` and is under the row-level policy, so a
+  request bound to the current tenant would answer "which tenants may you act
+  for" with the one the caller is already in.
+- **The brand mark is the control**, and the account menu carries the same list
+  — the mobile shell hides the header brand below 900px, and a phone is exactly
+  where somebody moves between two organisations. Both render one component
+  over one cached answer, so the two cannot drift and opening the second does
+  not re-ask the server. The mark used to link to `/apps`, which the Platform
+  tile beneath it in the rail still does. Choosing another organisation reloads
+  the shell rather than patching state: the menus, the permissions and every
+  list on screen belonged to the tenant just left.
+- **The demo seed now has two organisations** (`cmd/api/seed.go`): Demo
+  Corporation, with contacts, products, inventory and documents, and Demo Trade
+  LLC, with contacts and billing. One tenant exercises nothing — the switcher,
+  the row-level isolation and the per-tenant permission set all behave
+  identically on a single-tenant deployment and identically wrongly if they are
+  broken. The seeder runs after the platform server is built rather than before
+  it, because an installation row references the `apps` table that the catalogue
+  sync fills, and it installs through the installer so a demo tenant cannot
+  claim an app whose Go module is not in the binary.
+
+### Removed — The Swift macOS client (`desktop-mac/`)
+
+- The bundle was a WKWebView pointed at the web client, plus a menu bar, Touch
+  ID and a preferences window for the two server URLs. It was built by a shell
+  script outside CI, so nothing compiled it on a pull request and nothing
+  caught a Swift file that no longer built until somebody ran `make build-mac`
+  by hand. `make build` ran it, which meant a build of this repository failed
+  on any machine without Xcode.
+- What it offered over the browser, the browser now offers: the web client is
+  installable as a PWA and gets its own dock icon and window from
+  `/manifest.webmanifest`, with no download and no store. The README section
+  that documented `make build-mac` / `make run-mac` says that instead.
+- The API keeps the path a native client would use — bearer tokens, no ambient
+  cookie — so this is a client leaving, not the platform closing a door. Anyone
+  wanting a native macOS app can build one against the same API in its own
+  repository, where it can have a real build and a real signing identity.
+
+### Added — Email verification as a platform capability
+
+- **One flow instead of one per app**
+  ([`internal/platform/emailverify`](backend/internal/platform/emailverify)):
+  proving that somebody controls an address is not one module's business.
+  Contacts wants it before it trusts an address, Documents before a signing link
+  leaves for an outsider, Gov Services before it answers a citizen at one. Each
+  is the same act, so it lives in the platform: an app module takes the service
+  in its constructor the way `gov_services` takes the integration manager and
+  calls `emailverify.Service.Send` with its own app id as the source.
+- **The mail is sent by a hosted service, deliberately.** Delivering mail that
+  arrives is not a matter of holding an SMTP password: it is SPF, DKIM, DMARC,
+  reverse DNS and a sending reputation, maintained continuously. enigma.mn runs
+  that, so this platform holds no mailbox credential, composes no message and
+  owns no sender address. What stays here is what only this platform can know —
+  which module asked, for whom, why, and whether the person came back.
+- **The return is good exactly once** (migrations `00026`, `00027`): the request
+  carries a single-use reference in the return address, stored as a SHA-256, and
+  claimed by one conditional `UPDATE`. A browser reloading the landing page
+  races itself, and a reference that travelled through a mailbox and a browser's
+  history must not be replayable. A spent, expired or invented reference is
+  `410` alike.
+- **The platform is not an open redirector**: the onward destination is
+  validated when the request is made — HTTPS only (HTTP tolerated for localhost
+  outside production), no embedded credentials — not when somebody arrives, by
+  which time the mail has gone.
+- **Mail bombing has a cost**: a per-tenant hourly allowance in front of the
+  shared key and a one-minute pause per recipient, answered `429` with a
+  `Retry-After` somebody can obey — a limit we can avoid provoking upstream is
+  one we do not have to explain. A request the service refuses withdraws its own
+  row, so the Overview screen never shows a verification nobody was asked for.
+- **Errors say who has to act**: a bad address is `400`, a missing key or an
+  HTTP `PUBLIC_ORIGIN` or a rejected key is `503` (this deployment, not the
+  request), and a failure at the service is `502` and retryable. An answer
+  nobody documented is never read as success.
+- **Settings → Email verification**: whether the service is reachable, what has
+  been asked for and by whom, the verified rate, and a test send. No key
+  management — keys belong to the sending service and are administered there,
+  and this platform's copy is a server-side environment variable that never
+  reaches a browser.
+- **The page shown after a click exists in all seven platform languages.** It is
+  read outside the product, by somebody who may never have seen it.
+- **Known limitation, stated on the screen**: the service has no webhook yet, so
+  a verification is recorded only when the person returns here. Somebody who
+  confirms on another device and never comes back stays `PENDING`. That is the
+  honest reading — this platform did not see it happen — and it is what the
+  Overview screen says rather than something the code knows and the operator
+  does not.
+
 ### Added — PDF E-Sign v2: eID Mongolia qualified remote signing
 
 - **eID Mongolia signature client ([`internal/platform/eidsign`](backend/internal/platform/eidsign))**:

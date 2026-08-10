@@ -58,11 +58,28 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # Cross-replica cache invalidation and the shared rate-limit counters are
+      # the two things that cannot be tested in one process. Without this the
+      # tests that cover them self-skip, which is how a coordination bug ships.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
       GOV_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
       OAUTH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
       DOCUMENTS_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
+      EMAILVERIFY_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
+      # Tenant row-level isolation, the permission cache and the session idle
+      # timeout are all database behaviour, and all self-skip without this.
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/platform_test?sslmode=disable
+      TEST_REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -108,6 +125,41 @@ jobs:
             echo "::error::documents integration tests skipped — DOCUMENTS_TEST_DATABASE_URL is not reaching the test"
             exit 1
           fi
+      - name: Fail if the email verification integration tests were skipped
+        # Same reasoning again: a confirmation is claimed by one conditional
+        # UPDATE, and a skipped test is how that stops being true without
+        # anybody noticing.
+        run: |
+          go test -run 'TestAReturnIsGoodExactlyOnce' -v ./internal/platform/emailverify/... \
+            | tee /tmp/emailverify.log
+          if grep -q -- '--- SKIP' /tmp/emailverify.log; then
+            echo "::error::email verification integration tests skipped — EMAILVERIFY_TEST_DATABASE_URL is not reaching the test"
+            exit 1
+          fi
+      - name: Fail if the tenant isolation tests were skipped
+        # This is the one that matters most. It is the test that proves a query
+        # carrying no WHERE tenant_id returns only the caller's rows — the whole
+        # point of the row-level policies. Skipped, the policies could stop
+        # applying entirely and every other test would still be green.
+        run: |
+          go test -run 'TestQueryWithoutATenantClauseSeesOnlyItsOwnTenant' -v \
+            ./internal/platform/dbguard/... | tee /tmp/dbguard.log
+          if grep -q -- '--- SKIP' /tmp/dbguard.log; then
+            echo "::error::tenant isolation tests skipped — TEST_DATABASE_URL is not reaching the test"
+            exit 1
+          fi
+      - name: Fail if the cross-replica tests were skipped
+        # Invalidation reaching another replica, and two replicas sharing one
+        # rate-limit budget, are both invisible to a single-process test.
+        run: |
+          go test -run 'TestAnInvalidationOnOneReplicaReachesAnother' -v \
+            ./internal/platform/cache/... | tee /tmp/cache.log
+          go test -run 'TestTwoReplicasShareOneBudget' -v \
+            ./internal/platform/security/... | tee -a /tmp/cache.log
+          if grep -q -- '--- SKIP' /tmp/cache.log; then
+            echo "::error::cross-replica tests skipped — TEST_REDIS_URL is not reaching the test"
+            exit 1
+          fi
 
   frontend:
     name: Frontend Build
@@ -126,6 +178,12 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npx tsc --noEmit
+      # The service worker sits in front of every request the app makes, and
+      # this platform's requests carry tenant data. It is written so that /api
+      # is never cached; this asserts that rather than trusting a handful of
+      # early returns to survive editing.
+      - name: Check the service worker caches nothing personal
+        run: npm run pwa:check
       - name: Build
         run: npm run build
 

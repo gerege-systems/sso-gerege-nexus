@@ -3,9 +3,8 @@
 import React from "react";
 import { Dashboard, GovApiError, TaskStatus } from "@/lib/gov";
 import { useI18n } from "@/lib/i18n";
-import { AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
 
-export const STATUS_STYLE: Record<TaskStatus, string> = {
+const STATUS_STYLE: Record<TaskStatus, string> = {
   RECEIVED: "bg-slate-100 text-slate-700",
   ASSIGNED: "bg-sky-100 text-sky-700",
   IN_PROGRESS: "bg-blue-100 text-blue-700",
@@ -46,71 +45,6 @@ export function StatusBadge({ status }: { status: TaskStatus }) {
 export function describeError(err: unknown, fallback: string): string {
   if (err instanceof GovApiError) return `${err.message} (${err.code})`;
   return fallback;
-}
-
-export function PageHeader({
-  icon,
-  title,
-  subtitle,
-  actions,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <header className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          {icon}
-          {title}
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
-      </div>
-      {actions}
-    </header>
-  );
-}
-
-export function Banner({
-  tone,
-  message,
-  onDismiss,
-}: {
-  tone: "error" | "success";
-  message: string;
-  onDismiss: () => void;
-}) {
-  const { t } = useI18n();
-  const error = tone === "error";
-  return (
-    <div
-      className={`p-3 border text-sm rounded-lg flex items-start gap-2 ${
-        error ? "bg-red-50 border-red-200 text-red-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"
-      }`}
-    >
-      {error ? <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> : <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />}
-      <span className="flex-1">{message}</span>
-      <button onClick={onDismiss} aria-label={t("base.action.close")}>
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
-
-export function Loading({ label }: { label?: string }) {
-  const { t } = useI18n();
-  return (
-    <div className="flex items-center gap-2 text-slate-500 text-sm">
-      <Loader2 className="w-4 h-4 animate-spin" />
-      {label || t("base.message.loading")}
-    </div>
-  );
-}
-
-export function EmptyState({ message }: { message: string }) {
-  return <p className="p-6 text-sm text-slate-500">{message}</p>;
 }
 
 /** The counters every level uses to monitor its authorised scope. */

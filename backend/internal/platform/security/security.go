@@ -43,10 +43,21 @@ func IsValidSlug(slug string) bool {
 }
 
 // SafeCORSOrigins returns whitelist of origins based on environment.
+//
+// ALLOWED_ORIGINS is a comma-separated list, and people write it the way people
+// write lists: "https://a.mn, https://b.mn". Splitting on the comma alone kept
+// the leading space, and an origin with a space in it matches no Origin header
+// ever sent, so every entry after the first was silently denied — a CORS
+// failure in the browser with nothing wrong in the logs.
 func SafeCORSOrigins() []string {
-	envOrigins := os.Getenv("ALLOWED_ORIGINS")
-	if envOrigins != "" {
-		return strings.Split(envOrigins, ",")
+	origins := make([]string, 0)
+	for _, origin := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	if len(origins) > 0 {
+		return origins
 	}
 	return []string{"http://localhost:3000", "http://127.0.0.1:3000"}
 }

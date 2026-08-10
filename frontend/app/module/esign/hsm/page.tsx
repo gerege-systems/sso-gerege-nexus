@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Plug, ServerCog, XCircle } from "lucide-react";
 import { esign, type HSMSettings, type Probe } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
-import { Banner, Card, Loading, PageHeader, useErrorMessage } from "@/components/esign/shared";
+import { Banner, Loading, PageHeader } from "@/components/ui";
+import { Card, useErrorMessage } from "@/components/esign/shared";
 
 /**
  * The HSM connection.
@@ -33,7 +34,7 @@ export default function EsignHSMPage() {
       })
       .catch((err) => setError(describe(err, t("base.message.error"))))
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [describe, t]);
 
   const test = async () => {
     setTesting(true);

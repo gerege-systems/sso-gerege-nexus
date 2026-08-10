@@ -4,7 +4,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { FulfillmentMode, GovService, OrgUnit, Workflow, gov } from "@/lib/gov";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
-import { Banner, EmptyState, Loading, PageHeader, describeError } from "@/components/gov/shared";
+import { Banner, EmptyState, Loading, PageHeader } from "@/components/ui";
+import { describeError } from "@/components/gov/shared";
 import { Landmark, Plus } from "lucide-react";
 
 /** Service passport registry: what the organisation delivers, and how each

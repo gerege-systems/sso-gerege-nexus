@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { api } from "@/lib/api";
+import { useResource } from "@/lib/useResource";
 import { useI18n } from "@/lib/i18n";
-import { Package, Plus, DollarSign, Tag, CheckCircle, XCircle } from "lucide-react";
+import { Modal } from "@/components/ui";
+import { Package, Plus, CheckCircle, XCircle } from "lucide-react";
 
 interface Product {
   id: string;
@@ -15,26 +17,17 @@ interface Product {
 
 export default function ProductsPage() {
   const { t } = useI18n();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ sku: "", name: "", price: 0, active: true });
   const [error, setError] = useState("");
 
-  const loadProducts = async () => {
-    try {
-      const data = await api.getProducts();
-      setProducts(data || []);
-    } catch (err: any) {
-      setError(err.message || "Failed to load products. Ensure Products app is installed & enabled.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const { data: products, loading, reload: loadProducts } = useResource(
+    async () => (await api.getProducts()) || [],
+    {
+      initial: [] as Product[],
+      onError: (err: any) => setError(err.message || t("products.message.load_failed")),
+    },
+  );
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +37,7 @@ export default function ProductsPage() {
       setForm({ sku: "", name: "", price: 0, active: true });
       await loadProducts();
     } catch (err: any) {
-      setError(err.message || "Failed to create product");
+      setError(err.message || t("products.message.create_failed"));
     }
   };
 
@@ -77,7 +70,7 @@ export default function ProductsPage() {
         <div className="py-8 text-slate-500 text-sm">{t("products.message.loading")}</div>
       ) : products.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 text-sm">
-          No products added yet. Click "New Product" to build your catalog.
+          {t("products.message.empty")}
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -115,63 +108,61 @@ export default function ProductsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">{t("products.view.create_title")}</h2>
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">SKU *</label>
-                <input
-                  type="text"
-                  placeholder={t("products.field.sku_placeholder")}
-                  value={form.sku}
-                  onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono"
-                  required
-                />
-              </div>
+        <Modal label={t("products.view.create_title")}>
+          <h2 className="text-xl font-bold text-slate-900 mb-4">{t("products.view.create_title")}</h2>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">SKU *</label>
+              <input
+                type="text"
+                placeholder={t("products.field.sku_placeholder")}
+                value={form.sku}
+                onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono"
+                required
+              />
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Product Name *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t("products.field.name")} *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Price ($) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Price ($) *</label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.price}
+                onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
 
-              <div className="flex items-center space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 rounded-lg text-sm"
-                >
-                  Save Product
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex items-center space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 rounded-lg text-sm"
+              >
+                {t("products.action.save")}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

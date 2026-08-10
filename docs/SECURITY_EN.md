@@ -64,6 +64,9 @@ Contact the security team directly:
 | OAuth2 client auth | Mandatory, using constant-time comparison |
 | National integration mocks | Disabled automatically when `ENVIRONMENT=production` |
 | Administrator rights | Installing, enabling or disabling apps and registering integrations require a tenant administrator |
+| Mail credentials | Verification mail is sent by the hosted service, so the platform holds no mailbox password. The service key lives in a server-side environment variable (`EMAIL_VERIFY_API_KEY`) and reaches neither a browser nor the database |
+| Single-use returns | The return after a confirmation is claimed by one conditional `UPDATE`; a spent, expired or invented reference is answered `410` alike, so a reference that travelled through a mailbox and a browser's history cannot be replayed |
+| Redirect control | Onward destinations must be HTTPS (HTTP only for localhost in development) and carry no credentials — the platform is not an open redirector |
 
 ---
 

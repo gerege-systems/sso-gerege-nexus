@@ -19,14 +19,31 @@ export interface Identity {
  */
 let identity: Promise<Identity> | null = null;
 
+/**
+ * Forget the cached answer. Sign-out and sign-in both navigate on the client —
+ * the module is never re-evaluated — so without this the cache outlives the
+ * session that filled it: the next person to sign in at the same desk was shown
+ * the previous one's screens, and a caller who signed in after an expired
+ * session kept the failure and saw nothing they were entitled to.
+ */
+export function resetAccess() {
+  identity = null;
+}
+
 export function useAccess() {
   const [me, setMe] = useState<Identity | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    identity ??= api.getMe();
-    identity
+    // Cache the request, but never the failure: a rejected promise left in
+    // place answers every later caller with the error that belonged to one
+    // moment. Clearing it on rejection lets the next mount ask again.
+    const pending = (identity ??= api.getMe().catch((error) => {
+      identity = null;
+      throw error;
+    }));
+    pending
       .then((value) => alive && setMe(value))
       // A failure here means the session is gone; Layout redirects to /login.
       .catch(() => undefined)

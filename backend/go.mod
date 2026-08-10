@@ -2,6 +2,8 @@ module github.com/gerege-systems/sso-gerege-nexus/backend
 
 go 1.26
 
+toolchain go1.26.5
+
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/gerege-systems/open-gerege-core v1.10.0
@@ -11,6 +13,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/prometheus/client_golang v1.24.1
+	github.com/redis/go-redis/v9 v9.22.0
 	golang.org/x/crypto v0.54.0
 	golang.org/x/time v0.15.0
 )
@@ -36,6 +39,7 @@ require (
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect

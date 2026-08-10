@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/go-chi/chi/v5"
 )
 
 // SignaturePolicy says how a document type may be signed. Every type has an
@@ -181,24 +181,22 @@ func (m *DocumentsModule) SaveSignaturePolicy(ctx context.Context, tenantID stri
 }
 
 func (m *DocumentsModule) listSignaturePoliciesHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
 	list, err := m.ListSignaturePolicies(r.Context(), tenantID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to fetch signature policies")
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch signature policies")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	httpx.JSON(w, http.StatusOK, list)
 }
 
 func (m *DocumentsModule) saveSignaturePolicyHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -208,7 +206,7 @@ func (m *DocumentsModule) saveSignaturePolicyHandler(w http.ResponseWriter, r *h
 		RequireNamedSigner bool `json:"require_named_signer"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid signature policy payload")
+		httpx.Error(w, http.StatusBadRequest, "invalid signature policy payload")
 		return
 	}
 
@@ -222,5 +220,5 @@ func (m *DocumentsModule) saveSignaturePolicyHandler(w http.ResponseWriter, r *h
 		writeWriteFailure(r.Context(), w, err, "failed to save the signature policy")
 		return
 	}
-	writeJSON(w, http.StatusOK, saved)
+	httpx.JSON(w, http.StatusOK, saved)
 }

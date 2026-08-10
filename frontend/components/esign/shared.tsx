@@ -1,19 +1,18 @@
 "use client";
 
-import React from "react";
-import { AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
-import { EsignApiError, type BatchItemStatus, type BatchStatus, type LogOutcome, type SessionState } from "@/lib/esign";
+import React, { useCallback } from "react";
+import { EsignApiError, type BatchItemStatus, type BatchStatus, type LogOutcome } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
 
 /**
  * Turns any thrown value into a message, without the machine code.
  *
- * Prefer useErrorMessage: the API answers in English, so this raw form puts an
- * English sentence in a Mongolian interface at exactly the moment something has
- * gone wrong. It remains for non-React callers and as the fallback when a code
- * has no translation yet.
+ * Only useErrorMessage calls this: the API answers in English, so this raw form
+ * puts an English sentence in a Mongolian interface at exactly the moment
+ * something has gone wrong. It is the fallback for a code with no translation
+ * yet, not something a screen should reach for.
  */
-export function describeError(err: unknown, fallback: string): string {
+function describeError(err: unknown, fallback: string): string {
   if (err instanceof EsignApiError) return err.message;
   if (err instanceof Error && err.message) return err.message;
   return fallback;
@@ -28,90 +27,28 @@ export function errorCode(err: unknown): string | null {
  * Translates a backend failure through the dictionary, keyed by its machine
  * code. An untranslated code falls back to the server's own message, so a new
  * code added on the server still says something useful.
+ *
+ * Memoised against the locale, and that is not a micro-optimisation: every
+ * screen puts this function in the dependency list of the useCallback that
+ * loads it. A new identity per render would make that load re-run on every
+ * render, so the screens had been leaving it out of the list instead — which is
+ * the same bug held one step further away, because a language switched
+ * mid-session would then leave the old locale's message on screen.
  */
 export function useErrorMessage() {
   const { t } = useI18n();
-  return (err: unknown, fallback?: string): string => {
-    const code = errorCode(err);
-    if (code) {
-      const key = `esign.error.${code}`;
-      const translated = t(key as never);
-      if (translated !== key) return translated;
-    }
-    return describeError(err, fallback ?? t("base.message.error"));
-  };
-}
-
-export function PageHeader({
-  icon,
-  title,
-  subtitle,
-  actions,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <header className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          {icon}
-          {title}
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
-      </div>
-      {actions}
-    </header>
+  return useCallback(
+    (err: unknown, fallback?: string): string => {
+      const code = errorCode(err);
+      if (code) {
+        const key = `esign.error.${code}`;
+        const translated = t(key as never);
+        if (translated !== key) return translated;
+      }
+      return describeError(err, fallback ?? t("base.message.error"));
+    },
+    [t],
   );
-}
-
-export function Banner({
-  tone,
-  message,
-  onDismiss,
-}: {
-  tone: "error" | "success" | "info";
-  message: string;
-  onDismiss?: () => void;
-}) {
-  const { t } = useI18n();
-  const style =
-    tone === "error"
-      ? "bg-red-50 border-red-200 text-red-700"
-      : tone === "success"
-        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-        : "bg-blue-50 border-blue-200 text-blue-700";
-  return (
-    <div className={`p-3 border text-sm rounded-lg flex items-start gap-2 ${style}`}>
-      {tone === "error" ? (
-        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-      ) : (
-        <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-      )}
-      <span className="flex-1">{message}</span>
-      {onDismiss && (
-        <button onClick={onDismiss} aria-label={t("base.action.close")}>
-          <X className="w-4 h-4" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-export function Loading({ label }: { label?: string }) {
-  const { t } = useI18n();
-  return (
-    <div className="flex items-center gap-2 text-slate-500 text-sm">
-      <Loader2 className="w-4 h-4 animate-spin" />
-      {label || t("base.message.loading")}
-    </div>
-  );
-}
-
-export function EmptyState({ message }: { message: string }) {
-  return <p className="p-6 text-sm text-slate-500 text-center italic">{message}</p>;
 }
 
 export function Card({ title, children, actions }: { title?: string; children: React.ReactNode; actions?: React.ReactNode }) {
@@ -128,13 +65,6 @@ export function Card({ title, children, actions }: { title?: string; children: R
   );
 }
 
-const SESSION_STYLE: Record<SessionState, string> = {
-  pending: "bg-amber-50 text-amber-700 border-amber-200",
-  completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  failed: "bg-red-50 text-red-700 border-red-200",
-  expired: "bg-slate-100 text-slate-600 border-slate-200",
-  rejected: "bg-rose-50 text-rose-700 border-rose-200",
-};
 
 const BATCH_STYLE: Record<BatchStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-600 border-slate-200",
@@ -181,11 +111,6 @@ function useEnumLabel(prefix: string) {
     const label = t(key as never);
     return label === key ? value : label;
   };
-}
-
-export function SessionBadge({ state }: { state: SessionState }) {
-  const label = useEnumLabel("esign.session");
-  return <Badge tone={SESSION_STYLE[state] ?? SESSION_STYLE.pending}>{label(state)}</Badge>;
 }
 
 export function BatchBadge({ status }: { status: BatchStatus }) {
@@ -256,7 +181,3 @@ export function formatBytes(bytes: number): string {
 }
 
 /** A short, monospaced fingerprint. The full SHA-256 is unreadable in a table. */
-export function shortHash(hash?: string): string {
-  if (!hash) return "—";
-  return `${hash.slice(0, 8)}…${hash.slice(-6)}`;
-}

@@ -13,6 +13,31 @@
         "name": "Харилцагчид",
         "description": "Байгууллагын харилцагч, үйлчлүүлэгч, нийлүүлэгчдийн бүртгэл.",
         "category": "Харилцагчийн удирдлага"
+      },
+      "ar": {
+        "name": "جهات الاتصال",
+        "description": "إدارة جهات الاتصال التجارية والعملاء والموردين.",
+        "category": "إدارة العلاقات"
+      },
+      "zh": {
+        "name": "联系人",
+        "description": "管理业务联系人、客户与供应商。",
+        "category": "客户关系管理"
+      },
+      "fr": {
+        "name": "Contacts",
+        "description": "Gérez les contacts professionnels, les clients et les fournisseurs.",
+        "category": "Gestion de la relation client"
+      },
+      "ru": {
+        "name": "Контакты",
+        "description": "Управление деловыми контактами, клиентами и поставщиками.",
+        "category": "Управление отношениями"
+      },
+      "es": {
+        "name": "Contactos",
+        "description": "Gestione contactos comerciales, clientes y proveedores.",
+        "category": "Gestión de clientes"
       }
     }
   },
@@ -30,6 +55,31 @@
         "name": "Бараа бүтээгдэхүүн",
         "description": "Барааны каталог, үнэ ба тенантад хамаарах SKU удирдлага.",
         "category": "Борлуулалт"
+      },
+      "ar": {
+        "name": "المنتجات",
+        "description": "إدارة كتالوج المنتجات والتسعير وأكواد SKU.",
+        "category": "المبيعات"
+      },
+      "zh": {
+        "name": "产品",
+        "description": "产品目录管理、定价与 SKU。",
+        "category": "销售"
+      },
+      "fr": {
+        "name": "Produits",
+        "description": "Gestion du catalogue produits, des prix et des SKU.",
+        "category": "Ventes"
+      },
+      "ru": {
+        "name": "Товары",
+        "description": "Управление каталогом товаров, ценами и SKU.",
+        "category": "Продажи"
+      },
+      "es": {
+        "name": "Productos",
+        "description": "Gestión del catálogo de productos, precios y SKU.",
+        "category": "Ventas"
       }
     }
   },
@@ -47,6 +97,31 @@
         "name": "Агуулах",
         "description": "Агуулахын удирдлага, үлдэгдлийн хяналт ба тохируулга.",
         "category": "Нийлүүлэлтийн сүлжээ"
+      },
+      "ar": {
+        "name": "المخزون",
+        "description": "إدارة المستودعات وتتبع المخزون والتسويات.",
+        "category": "سلسلة التوريد"
+      },
+      "zh": {
+        "name": "库存",
+        "description": "仓库管理、库存跟踪与调整。",
+        "category": "供应链"
+      },
+      "fr": {
+        "name": "Inventaire",
+        "description": "Gestion des entrepôts, suivi des stocks et ajustements.",
+        "category": "Chaîne d'approvisionnement"
+      },
+      "ru": {
+        "name": "Склад",
+        "description": "Управление складами, учёт запасов и корректировки.",
+        "category": "Цепочка поставок"
+      },
+      "es": {
+        "name": "Inventario",
+        "description": "Gestión de almacenes, seguimiento de stock y ajustes.",
+        "category": "Cadena de suministro"
       }
     }
   },
@@ -64,6 +139,31 @@
         "name": "Нэхэмжлэх ба e-Barimt",
         "description": "Улсын хураамжийн нэхэмжлэх, төлбөр ба e-Barimt татварын баримт.",
         "category": "Санхүү"
+      },
+      "ar": {
+        "name": "الفوترة العامة و e-Barimt",
+        "description": "فوترة الرسوم الحكومية ومدفوعات الخدمات العامة وإيصالات ضريبة e-Barimt.",
+        "category": "المالية"
+      },
+      "zh": {
+        "name": "公共计费与 e-Barimt",
+        "description": "国家规费开票、公共服务付款与 e-Barimt 税务收据。",
+        "category": "财务"
+      },
+      "fr": {
+        "name": "Facturation publique et e-Barimt",
+        "description": "Facturation des frais d'État, paiements de services publics et reçus fiscaux e-Barimt.",
+        "category": "Finance"
+      },
+      "ru": {
+        "name": "Публичные счета и e-Barimt",
+        "description": "Выставление счетов по государственным сборам, платежи за услуги и налоговые чеки e-Barimt.",
+        "category": "Финансы"
+      },
+      "es": {
+        "name": "Facturación pública y e-Barimt",
+        "description": "Facturación de tasas estatales, pagos de servicios públicos y recibos fiscales e-Barimt.",
+        "category": "Finanzas"
       }
     }
   },
@@ -81,6 +181,31 @@
         "name": "Цахим баримт ба гарын үсэг",
         "description": "Байгууллагын баримт бичгийн урсгал, тоон гарын үсэг ба батламжийн процесс.",
         "category": "Бүтээмж"
+      },
+      "ar": {
+        "name": "المستندات والتوقيعات الرقمية",
+        "description": "توجيه مستندات المؤسسة والتوقيعات الرقمية وسير عمل الموافقات.",
+        "category": "الإنتاجية"
+      },
+      "zh": {
+        "name": "数字文档与签名",
+        "description": "企业文档流转、数字签名与审批流程。",
+        "category": "生产力"
+      },
+      "fr": {
+        "name": "Documents et signatures numériques",
+        "description": "Circulation des documents d'entreprise, signatures numériques et flux d'approbation.",
+        "category": "Productivité"
+      },
+      "ru": {
+        "name": "Электронные документы и подписи",
+        "description": "Маршрутизация документов организации, цифровые подписи и процессы согласования.",
+        "category": "Продуктивность"
+      },
+      "es": {
+        "name": "Documentos y firmas digitales",
+        "description": "Circulación de documentos corporativos, firmas digitales y flujos de aprobación.",
+        "category": "Productividad"
       }
     }
   },
@@ -98,6 +223,31 @@
         "name": "Хөгжүүлэгчийн портал ба OAuth2 SSO",
         "description": "OAuth2 / OpenID Connect client аппликейшны удирдлага ба API эрхийн мэдээлэл.",
         "category": "Хөгжүүлэгчийн хэрэгсэл"
+      },
+      "ar": {
+        "name": "بوابة المطورين و OAuth2 SSO",
+        "description": "إدارة تطبيقات OAuth2 / OpenID Connect وبيانات اعتماد API.",
+        "category": "أدوات المطورين"
+      },
+      "zh": {
+        "name": "开发者门户与 OAuth2 SSO",
+        "description": "OAuth2 / OpenID Connect 客户端应用管理与 API 凭据。",
+        "category": "开发者工具"
+      },
+      "fr": {
+        "name": "Portail développeur et SSO OAuth2",
+        "description": "Gestion des applications clientes OAuth2 / OpenID Connect et des identifiants API.",
+        "category": "Outils développeur"
+      },
+      "ru": {
+        "name": "Портал разработчика и OAuth2 SSO",
+        "description": "Управление клиентскими приложениями OAuth2 / OpenID Connect и учётными данными API.",
+        "category": "Инструменты разработчика"
+      },
+      "es": {
+        "name": "Portal de desarrollador y SSO OAuth2",
+        "description": "Gestión de aplicaciones cliente OAuth2 / OpenID Connect y credenciales de API.",
+        "category": "Herramientas de desarrollo"
       }
     }
   },
@@ -115,6 +265,31 @@
         "name": "Төрийн үйлчилгээ",
         "description": "Тохируулж болох төрийн үйлчилгээний хүсэлт: байгууллагын бүтэц, хувилбартай урсгал, шилжүүлэлт ба баталгаажуулалт.",
         "category": "Төрийн үйлчилгээ"
+      },
+      "ar": {
+        "name": "الخدمات الحكومية",
+        "description": "طلبات الخدمات الحكومية القابلة للتهيئة: الهيكل التنظيمي وسير العمل بإصدارات والتفويض والتحقق.",
+        "category": "الخدمة العامة"
+      },
+      "zh": {
+        "name": "政务服务",
+        "description": "可配置的政务服务申请：组织层级、版本化流程、委派与核验。",
+        "category": "公共服务"
+      },
+      "fr": {
+        "name": "Services publics",
+        "description": "Demandes de services publics configurables : hiérarchie organisationnelle, flux versionnés, délégation et vérification.",
+        "category": "Service public"
+      },
+      "ru": {
+        "name": "Государственные услуги",
+        "description": "Настраиваемые заявки на государственные услуги: организационная иерархия, версионные процессы, делегирование и проверка.",
+        "category": "Государственная служба"
+      },
+      "es": {
+        "name": "Servicios públicos",
+        "description": "Solicitudes de servicios públicos configurables: jerarquía organizativa, flujos versionados, delegación y verificación.",
+        "category": "Servicio público"
       }
     }
   },
@@ -132,6 +307,31 @@
         "name": "PDF цахим гарын үсэг",
         "description": "PDF баримт бичгийг Gerege eSign HSM үйлчилгээгээр тоон гарын үсгээр баталгаажуулах.",
         "category": "Бүтээмж"
+      },
+      "ar": {
+        "name": "توقيع PDF الإلكتروني",
+        "description": "ارفع مستندات PDF ووقّعها بالتوقيع الرقمي المنغولي عبر خدمة Gerege eSign HSM.",
+        "category": "الإنتاجية"
+      },
+      "zh": {
+        "name": "PDF 电子签名",
+        "description": "上传 PDF 文档，通过 Gerege eSign HSM 服务使用蒙古数字签名进行签署。",
+        "category": "生产力"
+      },
+      "fr": {
+        "name": "Signature électronique PDF",
+        "description": "Téléversez des documents PDF et signez-les avec la signature numérique mongole via le service Gerege eSign HSM.",
+        "category": "Productivité"
+      },
+      "ru": {
+        "name": "Электронная подпись PDF",
+        "description": "Загружайте PDF-документы и подписывайте их монгольской цифровой подписью через сервис Gerege eSign HSM.",
+        "category": "Продуктивность"
+      },
+      "es": {
+        "name": "Firma electrónica PDF",
+        "description": "Suba documentos PDF y fírmelos con la firma digital mongola mediante el servicio Gerege eSign HSM.",
+        "category": "Productividad"
       }
     }
   }

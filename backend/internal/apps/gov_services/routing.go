@@ -34,13 +34,6 @@ func NewUnitGraph(units []*OrgUnit) *UnitGraph {
 	return g
 }
 
-func (g *UnitGraph) Unit(id string) (*OrgUnit, bool) {
-	u, ok := g.byID[id]
-	return u, ok
-}
-
-func (g *UnitGraph) Children(id string) []*OrgUnit { return g.childrenOf[id] }
-
 // Descendants returns id and every unit below it. Used for supervisory scope
 // and for dashboards that aggregate a whole branch.
 func (g *UnitGraph) Descendants(id string) []string {

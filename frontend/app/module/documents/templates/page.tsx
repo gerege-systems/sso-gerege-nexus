@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useLoadOnMount } from "@/lib/useResource";
 import { useAccess } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
-import { ActionMessage, Banner, SectionHeader } from "@/components/documents/shared";
+import { Banner, LoadingBlock, PageHeader, TableCard, fieldClass, rowActionClass } from "@/components/ui";
+import { ActionMessage } from "@/components/documents/shared";
 import { Files, Plus, Save, Trash2, Wand2 } from "lucide-react";
 
 interface Template {
@@ -98,9 +100,7 @@ export default function DocumentTemplatesPage() {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useLoadOnMount(loadData);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,13 +213,13 @@ export default function DocumentTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader
+      <PageHeader
         icon={<Files className="w-7 h-7 text-indigo-600" />}
         title={t("documents.menu.templates")}
         subtitle={t("documents.view.templates_hint")}
       />
 
-      {message && <Banner message={message} onDismiss={() => setMessage(null)} />}
+      {message && <Banner tone={message.type} message={message.text} onDismiss={() => setMessage(null)} />}
 
       {mayManage && (
         <form onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-xl p-4 grid gap-3 md:grid-cols-4">
@@ -229,7 +229,7 @@ export default function DocumentTemplatesPage() {
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className={fieldClass}
               required
             />
           </div>
@@ -238,7 +238,7 @@ export default function DocumentTemplatesPage() {
             <select
               value={form.doc_type}
               onChange={(e) => setForm({ ...form, doc_type: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className={fieldClass}
             >
               {DOC_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -256,7 +256,7 @@ export default function DocumentTemplatesPage() {
               placeholder={t("documents.field.title_pattern_placeholder")}
               value={form.title_pattern}
               onChange={(e) => setForm({ ...form, title_pattern: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className={fieldClass}
               required
             />
           </div>
@@ -275,7 +275,7 @@ export default function DocumentTemplatesPage() {
       )}
 
       {loading ? (
-        <div className="py-12 text-center text-slate-400">{t("documents.message.loading")}</div>
+        <LoadingBlock label={t("documents.message.loading")} />
       ) : templates.length === 0 ? (
         // Only a load that succeeded may say the tenant has no templates; a failed one
         // says so in the banner instead, and an operator adding one to a list the page
@@ -286,123 +286,123 @@ export default function DocumentTemplatesPage() {
           </div>
         )
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
-              <tr>
-                <th className="px-4 py-3">{t("documents.field.template_name")}</th>
-                <th className="px-4 py-3">{t("base.field.type")}</th>
-                <th className="px-4 py-3">{t("documents.field.title_pattern")}</th>
-                <th className="px-4 py-3">{t("base.state.active")}</th>
-                <th className="px-4 py-3 text-right">{t("base.field.actions")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {templates.map((tpl) => (
-                <tr key={tpl.id} className={`hover:bg-slate-50 ${tpl.active ? "" : "opacity-60"}`}>
-                  <td className="px-4 py-3">
-                    <input
-                      type="text"
-                      value={tpl.name}
-                      disabled={!mayManage}
-                      onChange={(e) => edit(tpl.id, { name: e.target.value })}
-                      className="w-full px-2 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={tpl.doc_type}
-                      disabled={!mayManage}
-                      onChange={(e) => edit(tpl.id, { doc_type: e.target.value })}
-                      className="px-2 py-1.5 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
+        <TableCard
+          head={
+            <tr>
+              <th className="px-4 py-3">{t("documents.field.template_name")}</th>
+              <th className="px-4 py-3">{t("base.field.type")}</th>
+              <th className="px-4 py-3">{t("documents.field.title_pattern")}</th>
+              <th className="px-4 py-3">{t("base.state.active")}</th>
+              <th className="px-4 py-3 text-right">{t("base.field.actions")}</th>
+            </tr>
+          }
+          footer={
+            <>
+            {/* A stale list says so for as long as it is stale — the banner can be
+                dismissed, and a refresh that failed after an action must not be the only
+                thing that says the rows are old. */}
+            {loadFailed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-amber-200 bg-amber-50">
+                <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => loadData()}
+                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {t("documents.action.retry")}
+                </button>
+              </div>
+            )}
+            </>
+          }
+        >
+          {templates.map((tpl) => (
+            <tr key={tpl.id} className={`hover:bg-slate-50 ${tpl.active ? "" : "opacity-60"}`}>
+              <td className="px-4 py-3">
+                <input
+                  type="text"
+                  value={tpl.name}
+                  disabled={!mayManage}
+                  onChange={(e) => edit(tpl.id, { name: e.target.value })}
+                  className="w-full px-2 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
+                />
+              </td>
+              <td className="px-4 py-3">
+                <select
+                  value={tpl.doc_type}
+                  disabled={!mayManage}
+                  onChange={(e) => edit(tpl.id, { doc_type: e.target.value })}
+                  className="px-2 py-1.5 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
+                >
+                  {DOC_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td className="px-4 py-3">
+                <input
+                  type="text"
+                  value={tpl.title_pattern}
+                  disabled={!mayManage}
+                  onChange={(e) => edit(tpl.id, { title_pattern: e.target.value })}
+                  className="w-full px-2 py-1.5 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
+                />
+              </td>
+              <td className="px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={tpl.active}
+                  disabled={!mayManage}
+                  onChange={(e) => edit(tpl.id, { active: e.target.checked })}
+                  title={t("documents.message.template_active_hint")}
+                  className="w-4 h-4 accent-indigo-600"
+                />
+              </td>
+              <td className="px-4 py-3 text-right">
+                {mayManage ? (
+                  <div className="flex items-center justify-end space-x-2">
+                    <button
+                      onClick={() => handleSave(tpl)}
+                      disabled={isBusy(tpl.id) || !tpl.name.trim() || !tpl.title_pattern.trim()}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
-                      {DOC_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3">
-                    <input
-                      type="text"
-                      value={tpl.title_pattern}
-                      disabled={!mayManage}
-                      onChange={(e) => edit(tpl.id, { title_pattern: e.target.value })}
-                      className="w-full px-2 py-1.5 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:border-transparent disabled:bg-transparent"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={tpl.active}
-                      disabled={!mayManage}
-                      onChange={(e) => edit(tpl.id, { active: e.target.checked })}
-                      title={t("documents.message.template_active_hint")}
-                      className="w-4 h-4 accent-indigo-600"
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {mayManage ? (
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => handleSave(tpl)}
-                          disabled={isBusy(tpl.id) || !tpl.name.trim() || !tpl.title_pattern.trim()}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                        >
-                          <Save className="w-3.5 h-3.5" />
-                          <span>{t("base.action.save")}</span>
-                        </button>
-                        <button
-                          onClick={() => handleUse(tpl)}
-                          disabled={isBusy(tpl.id) || !tpl.active || dirty[tpl.id]}
-                          title={
-                            dirty[tpl.id]
-                              ? t("documents.message.template_unsaved")
-                              : tpl.active
-                                ? undefined
-                                : t("documents.message.template_inactive")
-                          }
-                          className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-indigo-200 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
-                        >
-                          <Wand2 className="w-3.5 h-3.5" />
-                          <span>{t("documents.action.use_template")}</span>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(tpl)}
-                          disabled={isBusy(tpl.id)}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>{t("base.action.delete")}</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-slate-300 text-[11px]">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {/* A stale list says so for as long as it is stale — the banner can be
-              dismissed, and a refresh that failed after an action must not be the only
-              thing that says the rows are old. */}
-          {loadFailed && (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-amber-200 bg-amber-50">
-              <p className="text-[11px] text-amber-800">{t("documents.message.stale_rows")}</p>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => loadData()}
-                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-              >
-                {t("documents.action.retry")}
-              </button>
-            </div>
-          )}
-
-        </div>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{t("base.action.save")}</span>
+                    </button>
+                    <button
+                      onClick={() => handleUse(tpl)}
+                      disabled={isBusy(tpl.id) || !tpl.active || dirty[tpl.id]}
+                      title={
+                        dirty[tpl.id]
+                          ? t("documents.message.template_unsaved")
+                          : tpl.active
+                            ? undefined
+                            : t("documents.message.template_inactive")
+                      }
+                      className={rowActionClass}
+                    >
+                      <Wand2 className="w-3.5 h-3.5" />
+                      <span>{t("documents.action.use_template")}</span>
+                    </button>
+                    <button
+                      onClick={() => handleDelete(tpl)}
+                      disabled={isBusy(tpl.id)}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{t("base.action.delete")}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-slate-300 text-[11px]">—</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </TableCard>
       )}
     </div>
   );

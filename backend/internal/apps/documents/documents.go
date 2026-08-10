@@ -22,20 +22,21 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/appregistry"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/audit"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/auth"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/dan"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/eid"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/httpx"
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/rbac"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/security"
 	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/tenant"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/time/rate"
 )
 
@@ -62,6 +63,14 @@ const (
 	SignerEID = "EID" // eidmongolia.mn / sso.gov.mn digital signature
 	SignerDAN = "DAN" // dan.gerege.mn SSO gateway
 )
+
+// ErrTitleFrozen is returned when a document's title can no longer be corrected.
+//
+// It freezes at the first signature, and that is not a policy choice: the title is
+// what the citizen READ on their own device before approving — signatureDisplayText
+// puts it in front of them precisely so they know what they are consenting to. A title
+// that could change afterwards would make that consent a consent to something else.
+var ErrTitleFrozen = errors.New("this document has been signed, so its title is what the signer approved and cannot change")
 
 // ErrNotSignable is returned when a sign/reject is attempted on a document that
 // is missing, belongs to another tenant, or is no longer pending. The three
@@ -124,6 +133,10 @@ type DocumentsModule struct {
 	db     *pgxpool.Pool
 	eidSvc *eid.EIDService
 	danSvc *dan.DANService
+	// The interface rather than the concrete store, so the route table can be
+	// tested against a stub. What each route is checked against is the part of
+	// this module most easily changed by accident and least visible when it is.
+	perms rbac.PermissionStore
 
 	// Whether this cluster has an ICU collation for the title search to lean on. See
 	// titleMatch: without one, a Cyrillic search is case-sensitive on a database
@@ -171,6 +184,7 @@ func New(db *pgxpool.Pool) *DocumentsModule {
 		db:          db,
 		eidSvc:      eid.NewEIDService(),
 		danSvc:      dan.NewDANService(),
+		perms:       rbac.NewSQLPermissionStore(db),
 		signLimiter: security.NewIPRateLimiter(rate.Limit(float64(signPushRatePerMinute)/60.0), signPushBurst),
 	}
 	appregistry.Register(m)
@@ -193,7 +207,7 @@ func (m *DocumentsModule) Permissions() []internal.PermissionDefinition {
 
 func (m *DocumentsModule) Menus() []internal.MenuDefinition {
 	return []internal.MenuDefinition{
-		{ID: "documents", ParentID: "operations", Label: "Documents & E-Sign", Path: "/documents", Icon: "file-text", Order: 30, Labels: map[string]string{"mn": "Баримт ба цахим гарын үсэг"}},
+		{ID: "documents", ParentID: "operations", Label: "Documents & E-Sign", Path: "/documents", Icon: "file-text", Order: 30, Labels: map[string]string{"mn": "Баримт ба цахим гарын үсэг", "ar": "المستندات والتوقيع الإلكتروني", "zh": "文档与电子签名", "fr": "Documents et signature électronique", "ru": "Документы и электронная подпись", "es": "Documentos y firma electrónica"}},
 	}
 }
 
@@ -215,7 +229,7 @@ const bodyLimit = 64 << 10 // 64 KB, sixteen times the largest real request
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ContentLength > bodyLimit {
-			writeError(w, http.StatusRequestEntityTooLarge,
+			httpx.Error(w, http.StatusRequestEntityTooLarge,
 				fmt.Sprintf("the request body is larger than %d bytes", bodyLimit))
 			return
 		}
@@ -228,34 +242,40 @@ func (m *DocumentsModule) RegisterRoutes(r chi.Router, tenantAuthMiddleware func
 	r.Route("/api/v1/documents", func(dr chi.Router) {
 		dr.Use(tenantAuthMiddleware)
 		dr.Use(limitBody)
-		dr.Get("/", m.listDocumentsHandler)
-		dr.Post("/", m.createDocumentHandler)
+		read := rbac.RequirePermission(m.perms, "documents.read")
+		manage := rbac.RequirePermission(m.perms, "documents.manage")
+		sign := rbac.RequirePermission(m.perms, "documents.sign")
+		dr.With(read).Get("/", m.listDocumentsHandler)
+		dr.With(manage).Post("/", m.createDocumentHandler)
 
 		// Templates a document is started from.
-		dr.Get("/templates", m.listTemplatesHandler)
-		dr.Post("/templates", m.createTemplateHandler)
-		dr.Put("/templates/{id}", m.updateTemplateHandler)
-		dr.Delete("/templates/{id}", m.deleteTemplateHandler)
-		dr.Post("/templates/{id}/use", m.useTemplateHandler)
+		dr.With(read).Get("/templates", m.listTemplatesHandler)
+		dr.With(manage).Post("/templates", m.createTemplateHandler)
+		dr.With(manage).Put("/templates/{id}", m.updateTemplateHandler)
+		dr.With(manage).Delete("/templates/{id}", m.deleteTemplateHandler)
+		dr.With(manage).Post("/templates/{id}/use", m.useTemplateHandler)
 
 		// How a document type may be signed.
-		dr.Get("/policies", m.listSignaturePoliciesHandler)
-		dr.Put("/policies/{docType}", m.saveSignaturePolicyHandler)
+		dr.With(read).Get("/policies", m.listSignaturePoliciesHandler)
+		dr.With(manage).Put("/policies/{docType}", m.saveSignaturePolicyHandler)
 
 		// Who must sign it, in order.
-		dr.Get("/workflows", m.listWorkflowsHandler)
-		dr.Put("/workflows/{docType}", m.saveWorkflowHandler)
+		dr.With(read).Get("/workflows", m.listWorkflowsHandler)
+		dr.With(manage).Put("/workflows/{docType}", m.saveWorkflowHandler)
 
 		// How long it is kept.
-		dr.Get("/retention", m.listRetentionRulesHandler)
-		dr.Put("/retention/{docType}", m.saveRetentionRuleHandler)
+		dr.With(read).Get("/retention", m.listRetentionRulesHandler)
+		dr.With(manage).Put("/retention/{docType}", m.saveRetentionRuleHandler)
 
 		// A single document. Static segments above win over {id} in chi's trie,
 		// so "templates" and "policies" are never read as document ids.
-		dr.Get("/{id}/signatures", m.listSignaturesHandler)
-		dr.Get("/{id}/steps", m.listDocumentStepsHandler)
-		dr.Post("/{id}/route", m.routeDocumentHandler)
-		dr.Post("/{id}/reject", m.rejectDocumentHandler)
+		dr.With(read).Get("/{id}/signatures", m.listSignaturesHandler)
+		dr.With(read).Get("/{id}/steps", m.listDocumentStepsHandler)
+		// Correcting a title is authoring, not approving, so it is checked against
+		// documents.manage like the rest of this group — the path carries no /sign.
+		dr.With(manage).Put("/{id}/title", m.renameDocumentHandler)
+		dr.With(manage).Post("/{id}/route", m.routeDocumentHandler)
+		dr.With(sign).Post("/{id}/reject", m.rejectDocumentHandler)
 
 		// Signing is per channel, because the channels are not the same shape.
 		// E-ID is an approval the citizen gives on their own device, so it takes
@@ -267,23 +287,22 @@ func (m *DocumentsModule) RegisterRoutes(r chi.Router, tenantAuthMiddleware func
 		// pushes nothing, but it is budgeted with the same bucket because it is still an
 		// authentication attempt against a real person's credentials.
 		if m.signLimiter != nil {
-			dr.With(security.RateLimitMiddleware(m.signLimiter)).
+			dr.With(sign, security.RateLimitMiddleware(m.signLimiter)).
 				Post("/{id}/sign/eid/start", m.startEIDSignatureHandler)
-			dr.With(security.RateLimitMiddleware(m.signLimiter)).
+			dr.With(sign, security.RateLimitMiddleware(m.signLimiter)).
 				Post("/{id}/sign/dan", m.signWithDANHandler)
 		} else {
 			// A module built by hand in a test has no limiter; the routes still work.
-			dr.Post("/{id}/sign/eid/start", m.startEIDSignatureHandler)
-			dr.Post("/{id}/sign/dan", m.signWithDANHandler)
+			dr.With(sign).Post("/{id}/sign/eid/start", m.startEIDSignatureHandler)
+			dr.With(sign).Post("/{id}/sign/dan", m.signWithDANHandler)
 		}
-		dr.Post("/{id}/sign/eid/poll", m.pollEIDSignatureHandler)
+		dr.With(sign).Post("/{id}/sign/eid/poll", m.pollEIDSignatureHandler)
 	})
 }
 
 func (m *DocumentsModule) listDocumentsHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -300,7 +319,7 @@ func (m *DocumentsModule) listDocumentsHandler(w http.ResponseWriter, r *http.Re
 	if raw := strings.TrimSpace(query.Get("after_at")); raw != "" {
 		at, parseErr := time.Parse(time.RFC3339Nano, raw)
 		if parseErr != nil {
-			writeError(w, http.StatusBadRequest, "after_at must be an RFC3339 timestamp")
+			httpx.Error(w, http.StatusBadRequest, "after_at must be an RFC3339 timestamp")
 			return
 		}
 		filter.AfterAt = at
@@ -308,27 +327,26 @@ func (m *DocumentsModule) listDocumentsHandler(w http.ResponseWriter, r *http.Re
 	// Both halves name one row, so one without the other would silently page from
 	// somewhere nobody asked for.
 	if (filter.AfterID == "") != filter.AfterAt.IsZero() {
-		writeError(w, http.StatusBadRequest, "after_at and after_id go together")
+		httpx.Error(w, http.StatusBadRequest, "after_at and after_id go together")
 		return
 	}
 	page, err := m.ListDocuments(r.Context(), tenantID, filter, limit, offset)
 	if errors.Is(err, ErrInvalidDocument) {
-		writeError(w, http.StatusBadRequest, err.Error())
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to fetch documents", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to fetch documents")
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch documents")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, page)
+	httpx.JSON(w, http.StatusOK, page)
 }
 
 func (m *DocumentsModule) createDocumentHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -337,7 +355,7 @@ func (m *DocumentsModule) createDocumentHandler(w http.ResponseWriter, r *http.R
 		DocType string `json:"doc_type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Title == "" {
-		writeError(w, http.StatusBadRequest, "invalid document parameters: title is required")
+		httpx.Error(w, http.StatusBadRequest, "invalid document parameters: title is required")
 		return
 	}
 
@@ -347,13 +365,12 @@ func (m *DocumentsModule) createDocumentHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, doc)
+	httpx.JSON(w, http.StatusCreated, doc)
 }
 
 func (m *DocumentsModule) signWithDANHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -363,41 +380,71 @@ func (m *DocumentsModule) signWithDANHandler(w http.ResponseWriter, r *http.Requ
 		OTPCode   string `json:"otp_code"`   // Нэг удаагийн нууц код
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RegNumber == "" {
-		writeError(w, http.StatusBadRequest, "invalid signature request: reg_number is required")
+		httpx.Error(w, http.StatusBadRequest, "invalid signature request: reg_number is required")
 		return
 	}
 
 	doc, err := m.SignWithDAN(r.Context(), tenantID, docID, req.RegNumber, req.OTPCode)
 	switch {
 	case errors.Is(err, ErrNotSignable):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case errors.Is(err, ErrAlreadySigned):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case errors.Is(err, ErrProviderUnavailable):
 		// The gateway, not the caller. Same 503 the E-ID routes give, and for the same
 		// reason: it is worth trying again, and it is not something the operator did.
-		writeError(w, http.StatusServiceUnavailable, err.Error())
+		httpx.Error(w, http.StatusServiceUnavailable, err.Error())
 		return
 	case errors.Is(err, ErrSignatureRejected):
-		writeError(w, http.StatusBadRequest, err.Error())
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	case err != nil:
 		// A storage failure is ours, not the caller's: report it as one and keep
 		// the driver's message out of the response.
 		slog.ErrorContext(r.Context(), "failed to sign document through DAN", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to sign document")
+		httpx.Error(w, http.StatusInternalServerError, "failed to sign document")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, doc)
+	httpx.JSON(w, http.StatusOK, doc)
+}
+
+func (m *DocumentsModule) renameDocumentHandler(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "invalid rename request: title is required")
+		return
+	}
+
+	doc, err := m.RenameDocument(r.Context(), tenantID, chi.URLParam(r, "id"), req.Title)
+	switch {
+	case errors.Is(err, ErrTitleFrozen):
+		httpx.Error(w, http.StatusConflict, err.Error())
+		return
+	case errors.Is(err, ErrInvalidDocument):
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	case err != nil:
+		slog.ErrorContext(r.Context(), "failed to rename document", "error", err)
+		httpx.Error(w, http.StatusInternalServerError, "failed to rename document")
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, doc)
 }
 
 func (m *DocumentsModule) rejectDocumentHandler(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := tenant.FromContext(r.Context())
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	tenantID, ok := tenant.Require(w, r)
+	if !ok {
 		return
 	}
 
@@ -405,14 +452,14 @@ func (m *DocumentsModule) rejectDocumentHandler(w http.ResponseWriter, r *http.R
 	doc, err := m.RejectDocument(r.Context(), tenantID, docID)
 	switch {
 	case errors.Is(err, ErrNotSignable):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "failed to reject document")
+		httpx.Error(w, http.StatusInternalServerError, "failed to reject document")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, doc)
+	httpx.JSON(w, http.StatusOK, doc)
 }
 
 // textFault says why a string cannot be stored as Postgres text, or "" when it can.
@@ -673,6 +720,59 @@ func (m *DocumentsModule) SignWithDAN(ctx context.Context, tenantID, docID, regN
 		return nil, ErrAlreadySigned
 	}
 	return m.recordSignature(ctx, tenantID, docID, SignerDAN, signature, "")
+}
+
+// RenameDocument corrects a document's title while nobody has signed it yet.
+//
+// The app creates a document straight into the approval queue, which is one step for
+// an operator instead of two and leaves nothing to be forgotten in a drawer — but it
+// also means a mistyped title reaches the approvers with no way back. This is the way
+// back, and it closes at the first signature: from then on the title is what somebody
+// read and approved.
+//
+// The guard is in the statement, not around it. Reading "has anybody signed?" and then
+// updating would leave room for a signature to land in between, which is exactly the
+// case that must not be renameable.
+func (m *DocumentsModule) RenameDocument(ctx context.Context, tenantID, docID, title string) (*Document, error) {
+	if uuid.Validate(docID) != nil {
+		return nil, ErrTitleFrozen
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil, fmt.Errorf("%w: title cannot be empty", ErrInvalidDocument)
+	}
+	if len([]rune(title)) > TitleLimit {
+		return nil, fmt.Errorf("%w: a title is at most %d characters, this one is %d",
+			ErrInvalidDocument, TitleLimit, len([]rune(title)))
+	}
+	if fault := textFault(title); fault != "" {
+		return nil, fmt.Errorf("%w: the title cannot be stored — %s", ErrInvalidDocument, fault)
+	}
+
+	var was string
+	err := m.db.QueryRow(ctx,
+		`UPDATE document_records d
+		    SET title = $1
+		  WHERE d.id = $2 AND d.tenant_id = $3
+		    AND d.status IN ($4, $5)
+		    AND NOT EXISTS (SELECT 1 FROM document_signatures s WHERE s.document_id = d.id)
+		 RETURNING (SELECT title FROM document_records o WHERE o.id = d.id)`,
+		title, docID, tenantID, StatusDraft, StatusPending).Scan(&was)
+	if isNoRows(err) {
+		// Signed, decided, or not this tenant's. All three are "you cannot rename this",
+		// and telling them apart would say whether a document exists.
+		return nil, ErrTitleFrozen
+	}
+	if err != nil {
+		return nil, fmt.Errorf("rename document: %w", err)
+	}
+
+	// Both titles, because a dispute asks what it used to say.
+	audit.Record(ctx, tenantID, actorFor(ctx), "documents.renamed", docID, map[string]any{
+		"from": was, "to": title,
+	})
+
+	return m.getDocument(ctx, tenantID, docID)
 }
 
 // recordSignature writes the signature and decides whether the chain is complete.
@@ -1150,16 +1250,6 @@ func isConstraintViolation(err error, name string) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == name
 }
 
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
 // writeWriteFailure sorts a failed write into the class its caller can act on:
 // what they sent (400 with the reason), a collision with somebody else's change
 // (409, retryable), or ours (500 with a fixed message, the driver's own text
@@ -1169,11 +1259,11 @@ func writeError(w http.ResponseWriter, status int, message string) {
 func writeWriteFailure(ctx context.Context, w http.ResponseWriter, err error, whatFailed string) {
 	switch {
 	case errors.Is(err, ErrInvalidDocument), errors.Is(err, ErrInvalidConfiguration):
-		writeError(w, http.StatusBadRequest, err.Error())
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 	case isUniqueViolation(err):
-		writeError(w, http.StatusConflict, "this was changed by someone else at the same time — reload and try again")
+		httpx.Error(w, http.StatusConflict, "this was changed by someone else at the same time — reload and try again")
 	default:
 		slog.ErrorContext(ctx, whatFailed, "error", err)
-		writeError(w, http.StatusInternalServerError, whatFailed)
+		httpx.Error(w, http.StatusInternalServerError, whatFailed)
 	}
 }

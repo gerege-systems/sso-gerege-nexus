@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
+import { useLoadOnMount } from "@/lib/useResource";
 import { useI18n } from "@/lib/i18n";
 import { AdminOnly, useAccess } from "@/lib/permissions";
 import { BrainCircuit, BookOpen, Save, Plus } from "lucide-react";
@@ -31,7 +32,7 @@ export default function AISettings() {
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useLoadOnMount(load);
 
   async function save(prompt: Prompt) {
     await api.updateAIPrompt(prompt.key, prompt.content, prompt.active);

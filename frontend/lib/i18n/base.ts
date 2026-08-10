@@ -47,4 +47,23 @@ export const base = {
     mn: "{page} / {pages} хуудас · нийт {total}",
     en: "Page {page} of {pages} · {total} records",
   },
+
+  // Installing the platform from the browser. It sits in base rather than in an
+  // addon because it belongs to the shell, not to any one application.
+  "pwa.install.title": {
+    mn: "Апп болгон суулгах",
+    en: "Install as an app",
+  },
+  "pwa.install.body": {
+    mn: "Хөтчийн таб биш, өөрийн цонхтойгоор ажиллуулна.",
+    en: "Runs in its own window instead of a browser tab.",
+  },
+  "pwa.install.action": {
+    mn: "Суулгах",
+    en: "Install",
+  },
+  "pwa.install.ios": {
+    mn: "Хуваалцах → Нүүр дэлгэцэд нэмэх",
+    en: "Share → Add to Home Screen",
+  },
 } as const;

@@ -12,6 +12,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/gerege-systems/sso-gerege-nexus/backend/internal/platform/async"
 )
 
 // sweepInterval is how often abandoned ceremonies are closed.
@@ -28,7 +30,7 @@ const sweepInterval = 5 * time.Minute
 // It returns when ctx is cancelled, so shutdown does not have to wait a full
 // interval.
 func (m *Module) StartHousekeeping(ctx context.Context) {
-	go func() {
+	async.Go("esign-housekeeping", func() {
 		ticker := time.NewTicker(sweepInterval)
 		defer ticker.Stop()
 		for {
@@ -50,5 +52,5 @@ func (m *Module) StartHousekeeping(ctx context.Context) {
 				}
 			}
 		}
-	}()
+	})
 }

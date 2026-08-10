@@ -42,7 +42,14 @@ func IsProduction() bool {
 
 // SupportedLocales lists the languages the API can answer in. The first entry
 // is the default.
-var SupportedLocales = []string{"mn", "en"}
+//
+// This must stay in step with the client's LOCALES list (frontend/lib/i18n).
+// While it held only mn and en, a browser asking for any of the other five got
+// SupportedLocales[0] — Mongolian — for everything the server owns. The result
+// was a single screen in three languages at once: menu labels in Mongolian
+// because the server fell back, body copy in the language the user actually
+// picked because the client had it, and English wherever neither did.
+var SupportedLocales = []string{"mn", "ar", "zh", "en", "fr", "ru", "es"}
 
 // LocaleFromRequest resolves the caller's language from the `lang` query
 // parameter, falling back to Accept-Language and then to the default locale.

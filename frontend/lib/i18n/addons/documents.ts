@@ -48,6 +48,16 @@ export const documents = {
     en: "Showing the {shown} longest-waiting of {total}.",
   },
   "documents.action.load_more": { mn: "Дараагийнхыг ачаалах", en: "Load more" },
+  "documents.action.rename": { mn: "Гарчгийг засах", en: "Correct the title" },
+  "documents.message.renamed": {
+    mn: "Гарчгийг «{title}» болголоо.",
+    en: "The title is now \"{title}\".",
+  },
+  "documents.message.rename_failed": { mn: "Гарчгийг засаж чадсангүй", en: "The title could not be corrected" },
+  "documents.message.rename_hint": {
+    mn: "Гарын үсэг зурагдтал гарчгийг засаж болно. Анхны гарын үсгийн дараа тэр нь иргэн харж баталсан текст болох тул хөшинө.",
+    en: "A title can be corrected until somebody signs. After the first signature it is the text a citizen read and approved, so it is fixed.",
+  },
   "documents.message.stale_rows": {
     mn: "Эдгээр мөр хоцрогдсон байж болно — жагсаалтыг шинэчилж чадсангүй.",
     en: "These rows may be out of date — the list could not be refreshed.",

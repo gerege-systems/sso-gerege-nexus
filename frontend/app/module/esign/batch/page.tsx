@@ -4,16 +4,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, FileText, Layers, Play, Plus, Smartphone, XCircle } from "lucide-react";
 import { esign, type Batch, type EsignDocument } from "@/lib/esign";
 import { useI18n } from "@/lib/i18n";
-import {
-  BatchBadge,
-  Banner,
-  Card,
-  EmptyState,
-  ItemBadge,
-  Loading,
-  PageHeader,
-  useErrorMessage,
-} from "@/components/esign/shared";
+import { Banner, EmptyState, Loading, Modal, PageHeader, cardClass, fieldClass, tableHeadClass } from "@/components/ui";
+import { BatchBadge, Card, ItemBadge, useErrorMessage } from "@/components/esign/shared";
 
 /**
  * Batch signing.
@@ -39,7 +31,7 @@ export default function EsignBatchPage() {
     } catch (err) {
       setError(describe(err, t("base.message.error")));
     }
-  }, [t]);
+  }, [describe, t]);
 
   useEffect(() => {
     (async () => {
@@ -89,14 +81,14 @@ export default function EsignBatchPage() {
 
       {error && <Banner tone="error" message={error} onDismiss={() => setError(null)} />}
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+      <div className={`${cardClass} overflow-x-auto`}>
         {loading ? (
           <div className="p-6">
             <Loading />
           </div>
         ) : (
           <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
+            <thead className={tableHeadClass}>
               <tr>
                 <th className="px-4 py-3">{t("esign.field.batch_name")}</th>
                 <th className="px-4 py-3">{t("base.field.status")}</th>
@@ -309,7 +301,7 @@ function BatchDetail({
 
       <Card title={t("esign.view.batch_documents")}>
         <table className="w-full text-left text-xs text-slate-600">
-          <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
+          <thead className={tableHeadClass}>
             <tr>
               <th className="px-4 py-3 w-10">#</th>
               <th className="px-4 py-3">{t("esign.field.document")}</th>
@@ -365,7 +357,7 @@ function CreateBatchModal({
       .then((page) => setDocuments(page.items || []))
       .catch((err) => setError(describe(err, t("base.message.error"))))
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [describe, t]);
 
   const toggle = (id: string) => {
     const next = new Set(picked);
@@ -393,74 +385,72 @@ function CreateBatchModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200 max-h-[90vh] flex flex-col">
-        <h2 className="text-xl font-bold text-slate-900 mb-4">{t("esign.view.new_batch_title")}</h2>
-        {error && <div className="mb-3"><Banner tone="error" message={error} onDismiss={() => setError(null)} /></div>}
+    <Modal size="lg" className="max-h-[90vh] flex flex-col" label={t("esign.view.new_batch_title")}>
+      <h2 className="text-xl font-bold text-slate-900 mb-4">{t("esign.view.new_batch_title")}</h2>
+      {error && <div className="mb-3"><Banner tone="error" message={error} onDismiss={() => setError(null)} /></div>}
 
-        <form onSubmit={submit} className="flex-1 flex flex-col min-h-0 space-y-4">
-          <div>
-            <label htmlFor="batch-name" className="block text-xs font-semibold text-slate-700 mb-1">
-              {t("esign.field.batch_name")} *
-            </label>
-            <input
-              id="batch-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={t("esign.field.batch_name_placeholder")}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              required
-            />
-          </div>
+      <form onSubmit={submit} className="flex-1 flex flex-col min-h-0 space-y-4">
+        <div>
+          <label htmlFor="batch-name" className="block text-xs font-semibold text-slate-700 mb-1">
+            {t("esign.field.batch_name")} *
+          </label>
+          <input
+            id="batch-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t("esign.field.batch_name_placeholder")}
+            className={fieldClass}
+            required
+          />
+        </div>
 
-          <div className="flex-1 min-h-0 flex flex-col">
-            <span className="block text-xs font-semibold text-slate-700 mb-1">
-              {t("esign.field.batch_documents", { count: picked.size })}
-            </span>
-            <div className="flex-1 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-              {loading ? (
-                <div className="p-4">
-                  <Loading />
-                </div>
-              ) : documents.length === 0 ? (
-                <EmptyState message={t("esign.message.no_pending_documents")} />
-              ) : (
-                documents.map((doc) => (
-                  <label key={doc.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={picked.has(doc.id)}
-                      onChange={() => toggle(doc.id)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-slate-900 truncate">{doc.title}</span>
-                      <span className="block text-[11px] text-slate-400 font-mono truncate">{doc.file_name}</span>
-                    </span>
-                  </label>
-                ))
-              )}
-            </div>
+        <div className="flex-1 min-h-0 flex flex-col">
+          <span className="block text-xs font-semibold text-slate-700 mb-1">
+            {t("esign.field.batch_documents", { count: picked.size })}
+          </span>
+          <div className="flex-1 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+            {loading ? (
+              <div className="p-4">
+                <Loading />
+              </div>
+            ) : documents.length === 0 ? (
+              <EmptyState message={t("esign.message.no_pending_documents")} />
+            ) : (
+              documents.map((doc) => (
+                <label key={doc.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={picked.has(doc.id)}
+                    onChange={() => toggle(doc.id)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-slate-900 truncate">{doc.title}</span>
+                    <span className="block text-[11px] text-slate-400 font-mono truncate">{doc.file_name}</span>
+                  </span>
+                </label>
+              ))
+            )}
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
-            >
-              {t("base.action.cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={busy || picked.size === 0 || !name.trim()}
-              className="w-1/2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-xs"
-            >
-              {t("esign.action.create_batch")}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs"
+          >
+            {t("base.action.cancel")}
+          </button>
+          <button
+            type="submit"
+            disabled={busy || picked.size === 0 || !name.trim()}
+            className="w-1/2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-xs"
+          >
+            {t("esign.action.create_batch")}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

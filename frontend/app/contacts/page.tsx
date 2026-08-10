@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { api } from "@/lib/api";
+import { useResource } from "@/lib/useResource";
 import { useI18n } from "@/lib/i18n";
-import { Users, Plus, Mail, Phone, Building, CheckCircle, XCircle } from "lucide-react";
+import { Modal, fieldClass } from "@/components/ui";
+import { Users, Plus, Mail, CheckCircle, XCircle } from "lucide-react";
 
 interface Contact {
   id: string;
@@ -16,26 +18,17 @@ interface Contact {
 
 export default function ContactsPage() {
   const { t } = useI18n();
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", active: true });
   const [error, setError] = useState("");
 
-  const loadContacts = async () => {
-    try {
-      const data = await api.getContacts();
-      setContacts(data || []);
-    } catch (err: any) {
-      setError(err.message || "Failed to load contacts. Ensure Contacts app is installed & enabled.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadContacts();
-  }, []);
+  const { data: contacts, loading, reload: loadContacts } = useResource(
+    async () => (await api.getContacts()) || [],
+    {
+      initial: [] as Contact[],
+      onError: (err: any) => setError(err.message || t("contacts.message.load_failed")),
+    },
+  );
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +38,7 @@ export default function ContactsPage() {
       setForm({ name: "", email: "", phone: "", company: "", active: true });
       await loadContacts();
     } catch (err: any) {
-      setError(err.message || "Failed to create contact");
+      setError(err.message || t("contacts.message.create_failed"));
     }
   };
 
@@ -57,7 +50,7 @@ export default function ContactsPage() {
             <Users className="w-6 h-6 text-indigo-600" />
             <span>{t("contacts.view.title")}</span>
           </h1>
-          <p className="text-sm text-slate-500">Manage business contacts, customers, and partners</p>
+          <p className="text-sm text-slate-500">{t("contacts.view.subtitle")}</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -78,7 +71,7 @@ export default function ContactsPage() {
         <div className="py-8 text-slate-500 text-sm">{t("contacts.message.loading")}</div>
       ) : contacts.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 text-sm">
-          No contacts created yet. Click "New Contact" to add your first record.
+          {t("contacts.message.empty")}
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -121,89 +114,87 @@ export default function ContactsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-slate-900">{t("contacts.view.create_title")}</h2>
+        <Modal label={t("contacts.view.create_title")}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-slate-900">{t("contacts.view.create_title")}</h2>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const info = await api.queryXYPCitizen("AA90010111");
+                  setForm({
+                    name: `${info.last_name} ${info.first_name}`,
+                    email: `${info.reg_number.toLowerCase()}@gerege.mn`,
+                    phone: "99112233",
+                    company: t("contacts.message.xyp_verified"),
+                    active: true,
+                  });
+                } catch (err: any) {
+                  alert(t("contacts.message.xyp_failed") + ": " + err.message);
+                }
+              }}
+              className="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-blue-200 transition"
+            >{t("contacts.action.xyp_autofill")}</button>
+          </div>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t("contacts.field.full_name")} *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className={fieldClass}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t("base.field.email")}</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t("base.field.phone")}</label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t("base.field.company")}</label>
+              <input
+                type="text"
+                value={form.company}
+                onChange={(e) => setForm({ ...form, company: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2 pt-2">
               <button
                 type="button"
-                onClick={async () => {
-                  try {
-                    const info = await api.queryXYPCitizen("AA90010111");
-                    setForm({
-                      name: `${info.last_name} ${info.first_name}`,
-                      email: `${info.reg_number.toLowerCase()}@gerege.mn`,
-                      phone: "99112233",
-                      company: t("contacts.message.xyp_verified"),
-                      active: true,
-                    });
-                  } catch (err: any) {
-                    alert("XYP Query Failed: " + err.message);
-                  }
-                }}
-                className="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-blue-200 transition"
-              >{t("contacts.action.xyp_autofill")}</button>
+                onClick={() => setShowModal(false)}
+                className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-sm"
+              >
+                {t("contacts.action.save")}
+              </button>
             </div>
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t("base.field.email")}</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t("base.field.phone")}</label>
-                <input
-                  type="text"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t("base.field.company")}</label>
-                <input
-                  type="text"
-                  value={form.company}
-                  onChange={(e) => setForm({ ...form, company: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-sm"
-                >
-                  Save Contact
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

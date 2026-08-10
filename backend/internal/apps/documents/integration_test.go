@@ -1997,6 +1997,79 @@ func TestAnAbsentChainIsNotAnEmptyChain(t *testing.T) {
 	}
 }
 
+// A document goes straight into the approval queue when it is created, which is one
+// step for an operator rather than two and leaves nothing forgotten in a drawer. The
+// price of that is a mistyped title reaching the approvers, so a title can be corrected
+// — until the first signature. After that it is what the citizen READ on their own
+// device before approving, and changing it would make their consent a consent to
+// something else.
+func TestATitleCanBeCorrectedUntilSomebodyHasSignedIt(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	if _, err := f.m.ReplaceWorkflow(ctx, f.tenantID, "CONTRACT", []WorkflowStep{
+		{Order: 1, Name: "Ня-бо", SignerRegNumber: ""},
+		{Order: 2, Name: "Захирал", SignerRegNumber: ""},
+	}); err != nil {
+		t.Fatalf("chain: %v", err)
+	}
+	doc, err := f.m.CreateDocument(ctx, f.tenantID, "Хамтарн ажиллах гэрэ 2026", "CONTRACT")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Nobody has signed, so the typo can go.
+	fixed, err := f.m.RenameDocument(ctx, f.tenantID, doc.ID, "  Хамтран ажиллах гэрээ 2026  ")
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if fixed.Title != "Хамтран ажиллах гэрээ 2026" {
+		t.Errorf("title = %q, want it corrected and trimmed", fixed.Title)
+	}
+
+	// A title nothing could store, or that no column could hold, is refused as the
+	// caller's mistake rather than saved or blamed on us.
+	for _, bad := range []string{"", "   ", strings.Repeat("х", TitleLimit+1), "a\x00b"} {
+		if _, err := f.m.RenameDocument(ctx, f.tenantID, doc.ID, bad); !errors.Is(err, ErrInvalidDocument) {
+			t.Errorf("rename to %q: got %v, want ErrInvalidDocument", bad, err)
+		}
+	}
+
+	// One signature, and the title is what that citizen approved.
+	if _, err := f.m.SignWithDAN(ctx, f.tenantID, doc.ID, "AA90010111", "123456"); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if _, err := f.m.RenameDocument(ctx, f.tenantID, doc.ID, "Өөр гарчиг"); !errors.Is(err, ErrTitleFrozen) {
+		t.Fatalf("rename after a signature: got %v, want ErrTitleFrozen", err)
+	}
+	after, err := f.m.getDocument(ctx, f.tenantID, doc.ID)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if after.Title != "Хамтран ажиллах гэрээ 2026" {
+		t.Errorf("the title moved to %q after a refused rename", after.Title)
+	}
+
+	// A decided document is history: even with no signature on it, its title stands.
+	other, err := f.m.CreateDocument(ctx, f.tenantID, "Татгалзах гэрээ", "CONTRACT")
+	if err != nil {
+		t.Fatalf("create the second: %v", err)
+	}
+	if _, err := f.m.RejectDocument(ctx, f.tenantID, other.ID); err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	if _, err := f.m.RenameDocument(ctx, f.tenantID, other.ID, "Дахиад өөр"); !errors.Is(err, ErrTitleFrozen) {
+		t.Errorf("renaming a rejected document: got %v, want ErrTitleFrozen", err)
+	}
+
+	// And another tenant cannot rename it at all — the same answer as "signed", so the
+	// refusal does not say whether the document exists.
+	intruder := newFixture(t)
+	if _, err := intruder.m.RenameDocument(ctx, intruder.tenantID, doc.ID, "Хулгайн гарчиг"); !errors.Is(err, ErrTitleFrozen) {
+		t.Errorf("cross-tenant rename: got %v, want ErrTitleFrozen", err)
+	}
+}
+
 // Meeting the signature count is not the same as finishing the chain. A signature
 // from somebody no step names counts toward what a document holds and satisfies none
 // of what it owes, so the payload has to say how many steps are still outstanding —
