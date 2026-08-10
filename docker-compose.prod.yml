@@ -40,12 +40,22 @@ services:
   # is the fan-out, and the caches it feeds all expire on their own.
   redis:
     image: redis:7-alpine
-    container_name: gerege_nexus_redis
+    # gerege_sso_redis, not gerege_nexus_redis. This service arrived with the
+    # upstream merge carrying upstream's container name, and this host runs the
+    # Gerege Nexus stack beside this one — the name was already taken, so the
+    # rollout died with "container name is already in use" after the images had
+    # been pulled. Every other container here is gerege_sso_*; this one is now
+    # too.
+    container_name: gerege_sso_redis
     restart: unless-stopped
     # No persistence: this is a coordination point, not a store.
     command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
-    ports:
-      - "127.0.0.1:6381:6379"
+    # Deliberately not published. Upstream maps 127.0.0.1:6381 and that host
+    # port is taken by the sibling stack for the same reason the name was, so
+    # publishing here would trade one collision for another. Nothing outside
+    # this compose project needs the port: the API reaches Redis over the
+    # project network as redis:6379, and an operator who wants a prompt has
+    # `docker exec -it gerege_sso_redis redis-cli`.
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

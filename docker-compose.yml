@@ -39,7 +39,10 @@ services:
   # empty database and every query fails with "relation does not exist".
   redis:
     image: redis:7-alpine
-    container_name: gerege_nexus_dev_redis
+    # Every other container in this file is gerege_sso_*; this one arrived with
+    # the upstream merge still carrying upstream's name, and two stacks on one
+    # developer's machine cannot both own it.
+    container_name: gerege_sso_dev_redis
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:
       - "6379:6379"
